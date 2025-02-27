@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 
 	"github.com/civo/node-agent/pkg/watcher"
@@ -25,22 +24,8 @@ var (
 )
 
 func run(ctx context.Context) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	wg := new(sync.WaitGroup)
-	defer wg.Wait()
-
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-	defer signal.Stop(c)
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		<-c
-		cancel()
-	}()
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	w, err := watcher.NewWatcher(ctx, apiURL, apiKey, region, clusterID, nodePoolID, nodeDesiredGPUCount)
 	if err != nil {
