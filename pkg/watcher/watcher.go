@@ -158,8 +158,6 @@ func (w *watcher) run(ctx context.Context) error {
 		return err
 	}
 
-	// TODO: add logic to check gpu count.
-
 	for _, node := range nodes.Items {
 		if !isNodeDesiredGPU(&node, w.nodeDesiredGPUCount) || !isNodeReady(&node) {
 			slog.Info("Node is not ready, attempting to reboot", "node", node.GetName())
@@ -182,7 +180,15 @@ func isNodeReady(node *v1.Node) bool {
 }
 
 func isNodeDesiredGPU(node *v1.Node, desired int) bool {
-	return false
+	quantity := node.Status.Allocatable[gpuStasName]
+	if quantity.IsZero() {
+		return false
+	}
+	gpuCount, ok := quantity.AsInt64()
+	if !ok {
+		return false
+	}
+	return gpuCount == int64(desired)
 }
 
 func (w *watcher) rebootNode(name string) error {
