@@ -2,30 +2,63 @@ package main
 
 import (
 	"context"
+	"flag"
+	"log"
+	"os"
+	"os/signal"
+	"strings"
+	"sync"
+	"syscall"
 
-	"github.com/civo/node-agent/internal/node"
+	"github.com/civo/node-agent/pkg/watcher"
 )
 
-func run() error {
-	ctx := context.Background()
+var (
+	versionInfo = flag.Bool("version", false, "Print the driver version")
+)
 
-	nodeClient, err := node.New(ctx)
+var (
+	apiURL    = strings.TrimSpace(os.Getenv("CIVO_API_URL"))
+	apiKey    = strings.TrimSpace(os.Getenv("CIVO_API_KEY"))
+	region    = strings.TrimSpace(os.Getenv("CIVO_REGION"))
+	namespace = strings.TrimSpace(os.Getenv("CIVO_NAMESPACE"))
+	clusterID = strings.TrimSpace(os.Getenv("CIVO_CLUSTER_ID"))
+)
+
+func run(ctx context.Context) error {
+	w, err := watcher.NewWatcher() // TODO: Add options
 	if err != nil {
-		panic(err)
+		return err
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	wg := new(sync.WaitGroup)
+	defer wg.Wait()
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(c)
+
+	wg.Add(1)
 	go func() {
-		if err := nodeClient.WatchNodes(ctx); err != nil {
-			panic(err)
-		}
+		defer wg.Done()
+		<-c
+		cancel()
 	}()
-	<-ctx.Done()
-	return nil
+
+	return w.Run(ctx)
 }
 
 func main() {
-	if err := run(); err != nil {
-		panic(err)
+	flag.Parse()
+	if *versionInfo {
+		// TOD: log
+		return
 	}
 
+	if err := run(context.Background()); err != nil {
+		log.Fatal(err)
+	}
 }
