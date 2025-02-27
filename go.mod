@@ -1,6 +1,6 @@
 module github.com/civo/node-agent
 
-go 1.23.5
+go 1.24.0
 
 require (
 	github.com/civo/civogo v0.3.94
