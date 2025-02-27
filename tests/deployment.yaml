@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-agent
+  labels:
+    app: node-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-agent
+  template:
+    metadata:
+      labels:
+        app: node-agent
+    spec:
+      containers:
+      - name: node-agent
+        image: jokesta/na:0.7
+        env:
+          - name: CIVO_REGION
+            value: "NYC1"
+          - name: CIVO_API_KEY
+            value: "QTiT"
+          - name: CLUSTER_NAME
+            value: "test-csi"
