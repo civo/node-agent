@@ -126,7 +126,7 @@ func (w *watcher) listNodes(ctx context.Context) {
 		condition := getNodeCondition(node)
 		if condition != "Ready" {
 			klog.Warningf("Node %s is in %s condition, attempting restart.", node.Name, condition)
-			if err := w.restart(cluster); err != nil {
+			if err := w.restart(cluster, node); err != nil {
 				klog.Errorf("Error restarting instance: %v", err)
 			}
 		} else {
@@ -147,17 +147,24 @@ func getNodeCondition(node v1.Node) string {
 	return "Unknown"
 }
 
-func (w *watcher) restart(cluster *civogo.KubernetesCluster) error {
-	instance, err := w.civoClient.GetKubernetesCluster(cluster.ID)
+func (w *watcher) restart(cluster *civogo.KubernetesCluster, node v1.Node) error {
+
+	instances, err := w.civoClient.ListKubernetesClusterInstances(cluster.ID)
 	if err != nil {
 		return fmt.Errorf("failed to get instance: %w", err)
 	}
-
-	res, err := w.civoClient.RebootInstance(instance.ID)
+	var requiredInstanceId string
+	for _, instance := range instances {
+		if instance.Hostname == node.Name {
+			requiredInstanceId = instance.ID
+			break
+		}
+	}
+	res, err := w.civoClient.RebootInstance(requiredInstanceId)
 	if err != nil {
 		return fmt.Errorf("failed to reboot instance: %w", err)
 	}
 
-	klog.Infof("Instance %s is rebooting: %v", instance.ID, res)
+	klog.Infof("Instance %s is rebooting: %v", requiredInstanceId, res)
 	return nil
 }
