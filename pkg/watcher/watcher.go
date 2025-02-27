@@ -150,6 +150,7 @@ func (w *watcher) Run(ctx context.Context) error {
 }
 
 func (w *watcher) run(ctx context.Context) error {
+	// TODO: Change to WatchAPI later.
 	nodes, err := w.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{
 		LabelSelector: metav1.FormatLabelSelector(w.nodeSelector),
 	})
