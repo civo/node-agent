@@ -13,20 +13,15 @@ import (
 	"github.com/civo/node-agent/pkg/watcher"
 )
 
-var (
-	versionInfo = flag.Bool("version", false, "Print the driver version")
-)
+var versionInfo = flag.Bool("version", false, "Print the driver version")
 
 var (
-	apiURL    = strings.TrimSpace(os.Getenv("CIVO_API_URL"))
-	apiKey    = strings.TrimSpace(os.Getenv("CIVO_API_KEY"))
-	region    = strings.TrimSpace(os.Getenv("CIVO_REGION"))
-	namespace = strings.TrimSpace(os.Getenv("CIVO_NAMESPACE"))
-	clusterID = strings.TrimSpace(os.Getenv("CIVO_CLUSTER_ID"))
+	region      = strings.TrimSpace(os.Getenv("CIVO_REGION"))
+	clusterName = strings.TrimSpace(os.Getenv("CIVO_CLUSTER_NAME"))
 )
 
 func run(ctx context.Context) error {
-	w, err := watcher.NewWatcher() // TODO: Add options
+	w, err := watcher.NewWatcher(ctx, clusterName, region) // TODO: Add options
 	if err != nil {
 		return err
 	}
