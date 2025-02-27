@@ -9,10 +9,10 @@ import (
 	"github.com/civo/civogo"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog/v2"
 )
 
 // Version is the current version of the this watcher
@@ -65,6 +65,7 @@ func (w *watcher) setupKubernetesClient() (err error) {
 		if err != nil {
 			return fmt.Errorf("failed to create kubernetes API client: %w", err)
 		}
+		klog.Info("Kubernetes client configured from kubeconfig path")
 		return nil
 	}
 
@@ -77,28 +78,32 @@ func (w *watcher) setupKubernetesClient() (err error) {
 		if err != nil {
 			return fmt.Errorf("failed to create kubernetes API client: %w", err)
 		}
+		klog.Info("Kubernetes client configured from in-cluster config")
 	}
 	return nil
 }
 
 func (w *watcher) setupCivoClient(_ context.Context) error {
-
 	civoClient, err := civogo.NewClient(w.apiKey, w.region)
 	if err != nil {
 		return err
 	}
 	w.civoClient = civoClient
+	klog.Info("Civo client configured successfully")
 	return nil
 }
 
 func (w *watcher) Run(ctx context.Context) error {
 	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop() // Ensure the ticker is stopped when the function exits
 
 	for {
 		select {
 		case <-ticker.C:
+			klog.Info("Running node check...")
 			w.listNodes(ctx)
 		case <-ctx.Done():
+			klog.Info("Context cancelled, stopping watcher.")
 			return nil
 		}
 	}
@@ -107,23 +112,25 @@ func (w *watcher) Run(ctx context.Context) error {
 func (w *watcher) listNodes(ctx context.Context) {
 	nodes, err := w.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
-		fmt.Printf("Error listing nodes: %v\n", err)
+		klog.Errorf("Error listing nodes: %v", err)
 		return
 	}
 
 	cluster, err := w.civoClient.GetKubernetesCluster(w.clusterName)
 	if err != nil {
-		fmt.Printf("Error getting cluster: %v\n", err)
+		klog.Errorf("Error getting cluster: %v", err)
 		return
 	}
 
 	for _, node := range nodes.Items {
 		condition := getNodeCondition(node)
 		if condition != "Ready" {
-			fmt.Print("restarting node: ", node.Name, " condition: ", condition, "\n")
+			klog.Warningf("Node %s is in %s condition, attempting restart.", node.Name, condition)
 			if err := w.restart(cluster); err != nil {
-				fmt.Printf("Error restarting instance: %v\n", err)
+				klog.Errorf("Error restarting instance: %v", err)
 			}
+		} else {
+			klog.Infof("Node %s is Ready", node.Name)
 		}
 	}
 }
@@ -151,6 +158,6 @@ func (w *watcher) restart(cluster *civogo.KubernetesCluster) error {
 		return fmt.Errorf("failed to reboot instance: %w", err)
 	}
 
-	fmt.Printf("Instance %s is rebooting: %v\n", instance.ID, res)
+	klog.Infof("Instance %s is rebooting: %v", instance.ID, res)
 	return nil
 }

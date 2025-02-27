@@ -16,11 +16,11 @@ spec:
     spec:
       containers:
       - name: node-agent
-        image: jokesta/na:0.7
+        image: jokesta/na:0.9
         env:
           - name: CIVO_REGION
             value: "NYC1"
           - name: CIVO_API_KEY
-            value: "QTiT"
-          - name: CLUSTER_NAME
+            value: "QBacG3617JNgDO92aKJFBDQ36shDHS2r5b6GrFP2sZogZj3TiT"
+          - name: CIVO_CLUSTER_NAME
             value: "test-csi"
