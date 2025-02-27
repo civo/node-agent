@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/civo/civogo"
@@ -19,7 +20,10 @@ import (
 // Version is the current version of the this watcher
 var Version string = "0.0.1"
 
-const nodePoolLabelKey = "kubernetes.civo.com/civo-node-pool"
+const (
+	nodePoolLabelKey = "kubernetes.civo.com/civo-node-pool"
+	gpuStasName      = "nvidia.com/gpu"
+)
 
 type Watcher interface {
 	Run(ctx context.Context) error
@@ -30,15 +34,16 @@ type watcher struct {
 	civoClient    civogo.Clienter
 	clientCfgPath string
 
-	clusterID string
-	region    string
-	apiKey    string
-	apiURL    string
+	clusterID           string
+	region              string
+	apiKey              string
+	apiURL              string
+	nodeDesiredGPUCount int
 
 	nodeSelector *metav1.LabelSelector
 }
 
-func NewWatcher(ctx context.Context, apiURL, apiKey, region, clusterID, nodePoolID string, opts ...Option) (Watcher, error) {
+func NewWatcher(ctx context.Context, apiURL, apiKey, region, clusterID, nodePoolID, nodeDesiredGPUCount string, opts ...Option) (Watcher, error) {
 	w := new(watcher)
 	for _, opt := range append(defaultOptions, opts...) {
 		opt(w)
@@ -54,6 +59,15 @@ func NewWatcher(ctx context.Context, apiURL, apiKey, region, clusterID, nodePool
 		return nil, fmt.Errorf("CIVO_API_KEY not set")
 	}
 
+	n, err := strconv.Atoi(nodeDesiredGPUCount)
+	if err != nil {
+		return nil, fmt.Errorf("CIVO_NODE_DESIRED_GPU_COUNT has an invalid value, %s: %w", nodeDesiredGPUCount, err)
+	}
+	if n < 1 {
+		return nil, fmt.Errorf("CIVO_NODE_DESIRED_GPU_COUNT must be at least 1: %s", nodeDesiredGPUCount)
+	}
+
+	w.nodeDesiredGPUCount = n
 	w.nodeSelector = &metav1.LabelSelector{
 		MatchLabels: map[string]string{
 			nodePoolLabelKey: nodePoolID,
@@ -147,7 +161,7 @@ func (w *watcher) run(ctx context.Context) error {
 	// TODO: add logic to check gpu count.
 
 	for _, node := range nodes.Items {
-		if !isNodeReady(&node) {
+		if !isNodeDesiredGPU(&node, w.nodeDesiredGPUCount) || !isNodeReady(&node) {
 			slog.Info("Node is not ready, attempting to reboot", "node", node.GetName())
 			if err := w.rebootNode(node.GetName()); err != nil {
 				slog.Error("Failed to reboot Node", "node", node.GetName(), "error", err)
@@ -164,6 +178,10 @@ func isNodeReady(node *v1.Node) bool {
 			return cond.Status == corev1.ConditionTrue
 		}
 	}
+	return false
+}
+
+func isNodeDesiredGPU(node *v1.Node, desired int) bool {
 	return false
 }
 

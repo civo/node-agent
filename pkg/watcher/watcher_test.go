@@ -11,11 +11,12 @@ import (
 )
 
 var (
-	testClusterID  = "test-cluster-123"
-	testRegion     = "lon1"
-	testApiKey     = "test-api-key"
-	testApiURL     = "https://test.civo.com"
-	testnodePoolID = "test-node-pool"
+	testClusterID           = "test-cluster-123"
+	testRegion              = "lon1"
+	testApiKey              = "test-api-key"
+	testApiURL              = "https://test.civo.com"
+	testnodePoolID          = "test-node-pool"
+	testNodeDesiredGPUCount = "8"
 )
 
 func TestIsNodeReady(t *testing.T) {
@@ -180,7 +181,7 @@ func TestRebootNode(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			w, err := NewWatcher(t.Context(),
-				testApiURL, testApiKey, testRegion, testClusterID, testnodePoolID, test.args.opts...)
+				testApiURL, testApiKey, testRegion, testClusterID, testnodePoolID, testNodeDesiredGPUCount, test.args.opts...)
 			if err != nil {
 				t.Fatal(err)
 			}
