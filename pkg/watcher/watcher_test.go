@@ -8,7 +8,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 var (
@@ -16,9 +18,271 @@ var (
 	testRegion              = "lon1"
 	testApiKey              = "test-api-key"
 	testApiURL              = "https://test.civo.com"
-	testnodePoolID          = "test-node-pool"
+	testNodePoolID          = "test-node-pool"
 	testNodeDesiredGPUCount = "8"
 )
+
+func TestRun(t *testing.T) {
+	type args struct {
+		opts                []Option
+		nodeDesiredGPUCount string
+		nodePoolID          string
+	}
+	type test struct {
+		name       string
+		args       args
+		beforeFunc func(*watcher)
+		wantErr    bool
+	}
+
+	tests := []test{
+		{
+			name: "Returns nil when node GPU count is 8 and no reboot needed",
+			args: args{
+				opts: []Option{
+					WithKubernetesClient(fake.NewSimpleClientset()),
+					WithCivoClient(&FakeClient{}),
+				},
+				nodeDesiredGPUCount: testNodeDesiredGPUCount,
+				nodePoolID:          testNodePoolID,
+			},
+			beforeFunc: func(w *watcher) {
+				t.Helper()
+				client := w.client.(*fake.Clientset)
+
+				nodes := &corev1.NodeList{
+					Items: []corev1.Node{
+						{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "node-01",
+								Labels: map[string]string{
+									nodePoolLabelKey: testNodePoolID,
+								},
+							},
+							Status: corev1.NodeStatus{
+								Conditions: []corev1.NodeCondition{
+									{
+										Type:   corev1.NodeReady,
+										Status: corev1.ConditionTrue,
+									},
+									{
+										Type:   corev1.NodeReady,
+										Status: corev1.ConditionFalse,
+									},
+								},
+								Allocatable: corev1.ResourceList{
+									gpuResourceName: resource.MustParse("8"),
+								},
+							},
+						},
+					},
+				}
+				client.Fake.PrependReactor("list", "nodes", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nodes, nil
+				})
+			},
+		},
+		{
+			name: "Returns nil and triggers reboot when GPU count drops below desired (7 GPUs available)",
+			args: args{
+				opts: []Option{
+					WithKubernetesClient(fake.NewSimpleClientset()),
+					WithCivoClient(&FakeClient{}),
+				},
+				nodeDesiredGPUCount: testNodeDesiredGPUCount,
+				nodePoolID:          testNodePoolID,
+			},
+			beforeFunc: func(w *watcher) {
+				t.Helper()
+				client := w.client.(*fake.Clientset)
+
+				nodes := &corev1.NodeList{
+					Items: []corev1.Node{
+						{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "node-01",
+								Labels: map[string]string{
+									nodePoolLabelKey: testNodePoolID,
+								},
+							},
+							Status: corev1.NodeStatus{
+								Conditions: []corev1.NodeCondition{
+									{
+										Type:   corev1.NodeReady,
+										Status: corev1.ConditionTrue,
+									},
+									{
+										Type:   corev1.NodeReady,
+										Status: corev1.ConditionFalse,
+									},
+								},
+								Allocatable: corev1.ResourceList{
+									gpuResourceName: resource.MustParse("7"),
+								},
+							},
+						},
+					},
+				}
+				client.Fake.PrependReactor("list", "nodes", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nodes, nil
+				})
+
+				civoClient := w.civoClient.(*FakeClient)
+				instance := &civogo.Instance{
+					ID: "instance-01",
+				}
+				civoClient.FindKubernetesClusterInstanceFunc = func(clusterID, search string) (*civogo.Instance, error) {
+					return instance, nil
+				}
+				civoClient.HardRebootInstanceFunc = func(id string) (*civogo.SimpleResponse, error) {
+					return new(civogo.SimpleResponse), nil
+				}
+			},
+		},
+		{
+			name: "Returns nil and triggers reboot when GPU count matches desired but node is not ready",
+			args: args{
+				opts: []Option{
+					WithKubernetesClient(fake.NewSimpleClientset()),
+					WithCivoClient(&FakeClient{}),
+				},
+				nodeDesiredGPUCount: testNodeDesiredGPUCount,
+				nodePoolID:          testNodePoolID,
+			},
+			beforeFunc: func(w *watcher) {
+				t.Helper()
+				client := w.client.(*fake.Clientset)
+
+				nodes := &corev1.NodeList{
+					Items: []corev1.Node{
+						{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "node-01",
+								Labels: map[string]string{
+									nodePoolLabelKey: testNodePoolID,
+								},
+							},
+							Status: corev1.NodeStatus{
+								Conditions: []corev1.NodeCondition{
+									{
+										Type:   corev1.NodeReady,
+										Status: corev1.ConditionFalse,
+									},
+								},
+								Allocatable: corev1.ResourceList{
+									gpuResourceName: resource.MustParse("8"),
+								},
+							},
+						},
+					},
+				}
+				client.Fake.PrependReactor("list", "nodes", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nodes, nil
+				})
+
+				civoClient := w.civoClient.(*FakeClient)
+				instance := &civogo.Instance{
+					ID: "instance-01",
+				}
+				civoClient.FindKubernetesClusterInstanceFunc = func(clusterID, search string) (*civogo.Instance, error) {
+					return instance, nil
+				}
+				civoClient.HardRebootInstanceFunc = func(id string) (*civogo.SimpleResponse, error) {
+					return new(civogo.SimpleResponse), nil
+				}
+			},
+		},
+		{
+			name: "Returns an error when unable to list nodes",
+			args: args{
+				opts: []Option{
+					WithKubernetesClient(fake.NewSimpleClientset()),
+					WithCivoClient(&FakeClient{}),
+				},
+				nodeDesiredGPUCount: testNodeDesiredGPUCount,
+				nodePoolID:          testNodePoolID,
+			},
+			beforeFunc: func(w *watcher) {
+				t.Helper()
+				client := w.client.(*fake.Clientset)
+
+				client.Fake.PrependReactor("list", "nodes", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, &corev1.NodeList{}, errors.New("invalid error")
+				})
+			},
+			wantErr: true,
+		},
+
+		{
+			name: "Returns an error when finding the Kubernetes cluster instance fails during reboot",
+			args: args{
+				opts: []Option{
+					WithKubernetesClient(fake.NewSimpleClientset()),
+					WithCivoClient(&FakeClient{}),
+				},
+				nodeDesiredGPUCount: testNodeDesiredGPUCount,
+				nodePoolID:          testNodePoolID,
+			},
+			beforeFunc: func(w *watcher) {
+				t.Helper()
+				client := w.client.(*fake.Clientset)
+
+				nodes := &corev1.NodeList{
+					Items: []corev1.Node{
+						{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "node-01",
+								Labels: map[string]string{
+									nodePoolLabelKey: testNodePoolID,
+								},
+							},
+							Status: corev1.NodeStatus{
+								Conditions: []corev1.NodeCondition{
+									{
+										Type:   corev1.NodeReady,
+										Status: corev1.ConditionFalse,
+									},
+								},
+								Allocatable: corev1.ResourceList{
+									gpuResourceName: resource.MustParse("8"),
+								},
+							},
+						},
+					},
+				}
+				client.Fake.PrependReactor("list", "nodes", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nodes, nil
+				})
+
+				civoClient := w.civoClient.(*FakeClient)
+				civoClient.FindKubernetesClusterInstanceFunc = func(clusterID, search string) (*civogo.Instance, error) {
+					return nil, errors.New("invalid error")
+				}
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			w, err := NewWatcher(t.Context(),
+				testApiURL, testApiKey, testRegion, testClusterID, test.args.nodePoolID, test.args.nodeDesiredGPUCount, test.args.opts...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			obj := w.(*watcher)
+			if test.beforeFunc != nil {
+				test.beforeFunc(obj)
+			}
+
+			err = obj.run(t.Context())
+			if (err != nil) != test.wantErr {
+				t.Errorf("error = %v, wantErr %v", err, test.wantErr)
+			}
+		})
+	}
+}
 
 func TestIsNodeReady(t *testing.T) {
 	type test struct {
@@ -248,7 +512,7 @@ func TestRebootNode(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			w, err := NewWatcher(t.Context(),
-				testApiURL, testApiKey, testRegion, testClusterID, testnodePoolID, testNodeDesiredGPUCount, test.args.opts...)
+				testApiURL, testApiKey, testRegion, testClusterID, testNodePoolID, testNodeDesiredGPUCount, test.args.opts...)
 			if err != nil {
 				t.Fatal(err)
 			}
