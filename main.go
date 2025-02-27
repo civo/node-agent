@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -22,6 +23,10 @@ var (
 )
 
 func run(ctx context.Context) error {
+	fmt.Print("Starting node-agent\n")
+	fmt.Print("region: ", region, "\n")
+	fmt.Print("clusterName: ", clusterName, "\n")
+	fmt.Print("apiKey: ", apiKey, "\n")
 	w, err := watcher.NewWatcher(ctx, clusterName, region, apiKey) // TODO: Add options
 	if err != nil {
 		return err

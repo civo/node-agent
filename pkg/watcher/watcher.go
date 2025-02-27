@@ -32,6 +32,11 @@ type watcher struct {
 
 func NewWatcher(ctx context.Context, clusterName, region, apiKey string, opts ...Option) (Watcher, error) {
 	w := new(watcher)
+
+	if len(apiKey) == 0 {
+		return nil, fmt.Errorf("CIVO_API_KEY not set")
+	}
+	w.apiKey = apiKey
 	for _, opt := range append(defaultOptions, opts...) {
 		opt(w)
 	}
@@ -78,10 +83,6 @@ func (w *watcher) setupKubernetesClient() (err error) {
 
 func (w *watcher) setupCivoClient(_ context.Context) error {
 
-	if len(w.apiKey) == 0 {
-		return fmt.Errorf("CIVO_API_KEY not set")
-	}
-
 	civoClient, err := civogo.NewClient(w.apiKey, w.region)
 	if err != nil {
 		return err
@@ -116,10 +117,10 @@ func (w *watcher) listNodes(ctx context.Context) {
 		return
 	}
 
-	fmt.Println("\nNodes List:")
 	for _, node := range nodes.Items {
 		condition := getNodeCondition(node)
 		if condition != "Ready" {
+			fmt.Print("restarting node: ", node.Name, " condition: ", condition, "\n")
 			if err := w.restart(cluster); err != nil {
 				fmt.Printf("Error restarting instance: %v\n", err)
 			}
