@@ -27,9 +27,10 @@ type watcher struct {
 	civoClient  civogo.Clienter
 	clusterName string
 	region      string
+	apiKey      string
 }
 
-func NewWatcher(ctx context.Context, clusterName, region string, opts ...Option) (Watcher, error) {
+func NewWatcher(ctx context.Context, clusterName, region, apiKey string, opts ...Option) (Watcher, error) {
 	w := new(watcher)
 	for _, opt := range append(defaultOptions, opts...) {
 		opt(w)
@@ -76,12 +77,12 @@ func (w *watcher) setupKubernetesClient() (err error) {
 }
 
 func (w *watcher) setupCivoClient(_ context.Context) error {
-	if os.Getenv("CIVO_API_KEY") == "" {
+
+	if len(w.apiKey) == 0 {
 		return fmt.Errorf("CIVO_API_KEY not set")
 	}
 
-	apiKey := os.Getenv("CIVO_API_KEY")
-	civoClient, err := civogo.NewClient(apiKey, w.region)
+	civoClient, err := civogo.NewClient(w.apiKey, w.region)
 	if err != nil {
 		return err
 	}
@@ -96,6 +97,8 @@ func (w *watcher) Run(ctx context.Context) error {
 		select {
 		case <-ticker.C:
 			w.listNodes(ctx)
+		case <-ctx.Done():
+			return nil
 		}
 	}
 }

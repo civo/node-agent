@@ -18,10 +18,11 @@ var versionInfo = flag.Bool("version", false, "Print the driver version")
 var (
 	region      = strings.TrimSpace(os.Getenv("CIVO_REGION"))
 	clusterName = strings.TrimSpace(os.Getenv("CIVO_CLUSTER_NAME"))
+	apiKey      = strings.TrimSpace(os.Getenv("CIVO_API_KEY"))
 )
 
 func run(ctx context.Context) error {
-	w, err := watcher.NewWatcher(ctx, clusterName, region) // TODO: Add options
+	w, err := watcher.NewWatcher(ctx, clusterName, region, apiKey) // TODO: Add options
 	if err != nil {
 		return err
 	}
