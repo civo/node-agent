@@ -1,4 +1,4 @@
-package k8s
+package node
 
 import (
 	"context"
@@ -10,14 +10,14 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func WatchNodes(ctx context.Context, client kubernetes.Interface, nodes string) error {
+func (n *NodeClient) WatchNodes(ctx context.Context, nodes string) error {
 
 	ticker := time.NewTicker(10 * time.Second)
 
 	for {
 		select {
 		case <-ticker.C:
-			listNodes(ctx, client)
+			listNodes(ctx, n.KClient)
 		}
 	}
 
@@ -32,7 +32,7 @@ func listNodes(ctx context.Context, client kubernetes.Interface) {
 
 	fmt.Println("\nNodes List:")
 	for _, node := range nodes.Items {
-		fmt.Printf("- %s (%s)\n", node.Name, getNodeCondition(node))
+		fmt.Printf("- %s  %s (%s)\n", node.Name, getNodeCondition(node))
 	}
 }
 
