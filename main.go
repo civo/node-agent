@@ -2,21 +2,20 @@ package main
 
 import (
 	"context"
-	"os"
 
-	"github.com/jokestax/node-agent/internal/node"
+	"github.com/civo/node-agent/internal/node"
 )
 
 func run() error {
 	ctx := context.Background()
 
-	noOfNodesToWatch := os.Getenv("NO_OF_NODES_TO_WATCH")
-	nodeClient, err := node.New()
+	nodeClient, err := node.New(ctx)
 	if err != nil {
 		panic(err)
 	}
+
 	go func() {
-		if err := nodeClient.WatchNodes(ctx, noOfNodesToWatch); err != nil {
+		if err := nodeClient.WatchNodes(ctx); err != nil {
 			panic(err)
 		}
 	}()

@@ -1,20 +1,28 @@
 package node
 
 import (
+	"context"
 	"fmt"
 	"os"
 
 	"github.com/civo/civogo"
-	"github.com/jokestax/node-agent/internal/k8s"
+	"github.com/civo/node-agent/internal/k8s"
+	"github.com/konstructio/workpool"
 	"k8s.io/client-go/kubernetes"
 )
 
 type NodeClient struct {
 	KClient    kubernetes.Interface
 	CivoClient *civogo.Client
+	Pool       *workpool.Pool
 }
 
-func New() (*NodeClient, error) {
+func New(ctx context.Context) (*NodeClient, error) {
+
+	pool, err := workpool.Initialize(ctx, 1, 100)
+	if err != nil {
+		return nil, err
+	}
 	kClient, err := k8s.New()
 	if err != nil {
 		return nil, err
@@ -34,5 +42,6 @@ func New() (*NodeClient, error) {
 	return &NodeClient{
 		KClient:    kClient,
 		CivoClient: civoClient,
+		Pool:       pool,
 	}, nil
 }
