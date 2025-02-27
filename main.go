@@ -42,7 +42,7 @@ func run(ctx context.Context) error {
 		cancel()
 	}()
 
-	w, err := watcher.NewWatcher(ctx, apiURL, apiKey, region, clusterID, nodePoolID)
+	w, err := watcher.NewWatcher(ctx, apiURL, apiKey, region, clusterID, nodePoolID, nodeDesiredGPUCount)
 	if err != nil {
 		return err
 	}
