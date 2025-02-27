@@ -18,9 +18,33 @@ spec:
       - name: node-agent
         image: jokesta/na:0.7
         env:
-          - name: CIVO_REGION
-            value: "NYC1"
           - name: CIVO_API_KEY
-            value: "QTiT"
-          - name: CLUSTER_NAME
-            value: "test-csi"
+            valueFrom:
+              secretKeyRef:
+                name: civo-api-access
+                key: api-key
+          - name: CIVO_REGION
+            valueFrom:
+              secretKeyRef:
+                name: civo-api-access
+                key: region
+          - name: CIVO_CLUSTER_ID
+            valueFrom:
+              secretKeyRef:
+                name: civo-api-access
+                key: cluster-id
+          - name: CIVO_API_URL
+            valueFrom:
+              secretKeyRef:
+                name: civo-api-access
+                key: api-url
+          - name: CIVO_NODE_POOL_ID
+            valueFrom:
+              secretKeyRef:
+                name: civo-api-access
+                key: api-url
+          - name: CIVO_NODE_DESIRED_GPU_COUNT
+            valueFrom:
+              secretKeyRef:
+                name: civo-api-access
+                key: api-url
