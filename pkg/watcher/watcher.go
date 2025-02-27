@@ -118,7 +118,7 @@ func (w *watcher) setupCivoClient() error {
 
 	client, err := civogo.NewClientWithURL(w.apiKey, w.apiURL, w.region)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to intiliase civo client: %w", err)
 	}
 
 	userAgent := &civogo.Component{
@@ -162,7 +162,7 @@ func (w *watcher) run(ctx context.Context) error {
 			slog.Info("Node is not ready, attempting to reboot", "node", node.GetName())
 			if err := w.rebootNode(node.GetName()); err != nil {
 				slog.Error("Failed to reboot Node", "node", node.GetName(), "error", err)
-				return err
+				return fmt.Errorf("failed to reboot node: %w", err)
 			}
 		}
 	}
