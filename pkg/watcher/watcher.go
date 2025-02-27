@@ -3,10 +3,11 @@ package watcher
 import (
 	"context"
 	"fmt"
-	"os"
+	"log/slog"
 	"time"
 
 	"github.com/civo/civogo"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -18,30 +19,53 @@ import (
 // Version is the current version of the this watcher
 var Version string = "0.0.1"
 
+const nodePoolLabelKey = "kubernetes.civo.com/civo-node-pool"
+
 type Watcher interface {
 	Run(ctx context.Context) error
 }
 
 type watcher struct {
-	client      kubernetes.Interface
-	civoClient  civogo.Clienter
-	clusterName string
-	region      string
-	apiKey      string
+	client        kubernetes.Interface
+	civoClient    civogo.Clienter
+	clientCfgPath string
+
+	clusterID string
+	region    string
+	apiKey    string
+	apiURL    string
+
+	nodeSelector *metav1.LabelSelector
 }
 
-func NewWatcher(ctx context.Context, clusterName, region, apiKey string, opts ...Option) (Watcher, error) {
+func NewWatcher(ctx context.Context, apiURL, apiKey, region, clusterID, nodePoolID string, opts ...Option) (Watcher, error) {
 	w := new(watcher)
 	for _, opt := range append(defaultOptions, opts...) {
 		opt(w)
 	}
+
+	if clusterID == "" {
+		return nil, fmt.Errorf("CIVO_CLUSTER_ID not set")
+	}
+	if nodePoolID == "" {
+		return nil, fmt.Errorf("CIVO_NODE_POOL_ID not set")
+	}
+	if w.civoClient == nil && apiKey == "" {
+		return nil, fmt.Errorf("CIVO_API_KEY not set")
+	}
+
+	w.nodeSelector = &metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			nodePoolLabelKey: nodePoolID,
+		},
+	}
+
 	if err := w.setupKubernetesClient(); err != nil {
 		return nil, err
 	}
-	if err := w.setupCivoClient(ctx); err != nil {
+	if err := w.setupCivoClient(); err != nil {
 		return nil, err
 	}
-
 	return w, nil
 }
 
@@ -49,12 +73,10 @@ func NewWatcher(ctx context.Context, clusterName, region, apiKey string, opts ..
 // If kubeconfig path is not empty, the client will be created using that path.
 // Otherwise, if the kubeconfig path is empty, the client will be created using the in-clustetr config.
 func (w *watcher) setupKubernetesClient() (err error) {
-	kubeconfig := os.Getenv("KUBECONFIG")
-
-	if kubeconfig != "" && w.client == nil {
-		cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if w.clientCfgPath != "" && w.client == nil {
+		cfg, err := clientcmd.BuildConfigFromFlags("", w.clientCfgPath)
 		if err != nil {
-			return fmt.Errorf("failed to build kubeconfig from path %q: %w", kubeconfig, err)
+			return fmt.Errorf("failed to build kubeconfig from path %q: %w", cfg, err)
 		}
 		w.client, err = kubernetes.NewForConfig(cfg)
 		if err != nil {
@@ -76,80 +98,85 @@ func (w *watcher) setupKubernetesClient() (err error) {
 	return nil
 }
 
-func (w *watcher) setupCivoClient(_ context.Context) error {
-
-	if len(w.apiKey) == 0 {
-		return fmt.Errorf("CIVO_API_KEY not set")
+func (w *watcher) setupCivoClient() error {
+	if w.civoClient != nil {
+		return nil
 	}
 
-	civoClient, err := civogo.NewClient(w.apiKey, w.region)
+	client, err := civogo.NewClientWithURL(w.apiKey, w.apiURL, w.region)
 	if err != nil {
 		return err
 	}
-	w.civoClient = civoClient
+
+	userAgent := &civogo.Component{
+		ID:      w.clusterID,
+		Name:    "node-agent",
+		Version: Version,
+	}
+	client.SetUserAgent(userAgent)
+
+	w.civoClient = client
 	return nil
 }
 
 func (w *watcher) Run(ctx context.Context) error {
 	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			w.listNodes(ctx)
+			slog.Info("Started the watcher process...")
+			if err := w.run(ctx); err != nil {
+				slog.Error("An error occurred while running the watcher process", "error", err)
+			}
 		case <-ctx.Done():
 			return nil
 		}
 	}
 }
 
-func (w *watcher) listNodes(ctx context.Context) {
-	nodes, err := w.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+func (w *watcher) run(ctx context.Context) error {
+	nodes, err := w.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{
+		LabelSelector: metav1.FormatLabelSelector(w.nodeSelector),
+	})
 	if err != nil {
-		fmt.Printf("Error listing nodes: %v\n", err)
-		return
+		return err
 	}
 
-	cluster, err := w.civoClient.GetKubernetesCluster(w.clusterName)
-	if err != nil {
-		fmt.Printf("Error getting cluster: %v\n", err)
-		return
-	}
+	// TODO: add logic to check gpu count.
 
-	fmt.Println("\nNodes List:")
 	for _, node := range nodes.Items {
-		condition := getNodeCondition(node)
-		if condition != "Ready" {
-			if err := w.restart(cluster); err != nil {
-				fmt.Printf("Error restarting instance: %v\n", err)
+		if !isNodeReady(&node) {
+			slog.Info("Node is not ready, attempting to reboot", "node", node.GetName())
+			if err := w.rebootNode(node.GetName()); err != nil {
+				slog.Error("Failed to reboot Node", "node", node.GetName(), "error", err)
+				return err
 			}
 		}
 	}
+	return nil
 }
 
-func getNodeCondition(node v1.Node) string {
+func isNodeReady(node *v1.Node) bool {
 	for _, cond := range node.Status.Conditions {
-		if cond.Type == v1.NodeReady {
-			if cond.Status == v1.ConditionTrue {
-				return "Ready"
-			}
-			return "NotReady"
+		if cond.Type == corev1.NodeReady {
+			return cond.Status == corev1.ConditionTrue
 		}
 	}
-	return "Unknown"
+	return false
 }
 
-func (w *watcher) restart(cluster *civogo.KubernetesCluster) error {
-	instance, err := w.civoClient.GetKubernetesCluster(cluster.ID)
+func (w *watcher) rebootNode(name string) error {
+	instance, err := w.civoClient.FindKubernetesClusterInstance(w.clusterID, name)
 	if err != nil {
-		return fmt.Errorf("failed to get instance: %w", err)
+		return fmt.Errorf("failed to find instance, clusterID: %s, nodeName: %s: %w", w.clusterID, name, err)
 	}
 
-	res, err := w.civoClient.RebootInstance(instance.ID)
+	_, err = w.civoClient.HardRebootInstance(instance.ID)
 	if err != nil {
-		return fmt.Errorf("failed to reboot instance: %w", err)
+		return fmt.Errorf("failed to reboot instance, clusterID: %s, instanceID: %s: %w", w.clusterID, instance.ID, err)
 	}
-
-	fmt.Printf("Instance %s is rebooting: %v\n", instance.ID, res)
+	slog.Info("Instance is rebooting", "instanceID", instance.ID)
 	return nil
 }

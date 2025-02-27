@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"flag"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -16,17 +16,16 @@ import (
 var versionInfo = flag.Bool("version", false, "Print the driver version")
 
 var (
-	region      = strings.TrimSpace(os.Getenv("CIVO_REGION"))
-	clusterName = strings.TrimSpace(os.Getenv("CIVO_CLUSTER_NAME"))
-	apiKey      = strings.TrimSpace(os.Getenv("CIVO_API_KEY"))
+	apiURL     = strings.TrimSpace(os.Getenv("CIVO_API_URL"))
+	apiKey     = strings.TrimSpace(os.Getenv("CIVO_API_KEY"))
+	region     = strings.TrimSpace(os.Getenv("CIVO_REGION"))
+	clusterID  = strings.TrimSpace(os.Getenv("CIVO_CLUSTER_ID"))
+	nodePoolID = strings.TrimSpace(os.Getenv("CIVO_NODE_POOL_ID"))
+
+	// TODO: GPU count
 )
 
 func run(ctx context.Context) error {
-	w, err := watcher.NewWatcher(ctx, clusterName, region, apiKey) // TODO: Add options
-	if err != nil {
-		return err
-	}
-
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -44,17 +43,28 @@ func run(ctx context.Context) error {
 		cancel()
 	}()
 
+	w, err := watcher.NewWatcher(ctx, apiURL, apiKey, region, clusterID, nodePoolID)
+	if err != nil {
+		return err
+	}
 	return w.Run(ctx)
 }
 
 func main() {
 	flag.Parse()
 	if *versionInfo {
-		// TOD: log
+		slog.Info("node-agent", "version", watcher.Version)
 		return
 	}
 
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil).WithAttrs([]slog.Attr{
+		slog.String("clusterID", clusterID),
+		slog.String("region", region),
+		slog.String("nodePoolID", nodePoolID),
+	})))
+
 	if err := run(context.Background()); err != nil {
-		log.Fatal(err)
+		slog.Error("The node-agent encountered a critical error and will exit", "error", err)
+		os.Exit(1)
 	}
 }
