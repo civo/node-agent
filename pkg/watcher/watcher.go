@@ -9,7 +9,6 @@ import (
 
 	"github.com/civo/civogo"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/client-go/kubernetes"
@@ -22,7 +21,7 @@ var Version string = "0.0.1"
 
 const (
 	nodePoolLabelKey = "kubernetes.civo.com/civo-node-pool"
-	gpuStasName      = "nvidia.com/gpu"
+	gpuResourceName  = "nvidia.com/gpu"
 )
 
 type Watcher interface {
@@ -170,7 +169,7 @@ func (w *watcher) run(ctx context.Context) error {
 	return nil
 }
 
-func isNodeReady(node *v1.Node) bool {
+func isNodeReady(node *corev1.Node) bool {
 	for _, cond := range node.Status.Conditions {
 		if cond.Type == corev1.NodeReady {
 			return cond.Status == corev1.ConditionTrue
@@ -179,8 +178,8 @@ func isNodeReady(node *v1.Node) bool {
 	return false
 }
 
-func isNodeDesiredGPU(node *v1.Node, desired int) bool {
-	quantity := node.Status.Allocatable[gpuStasName]
+func isNodeDesiredGPU(node *corev1.Node, desired int) bool {
+	quantity := node.Status.Allocatable[gpuResourceName]
 	if quantity.IsZero() {
 		return false
 	}

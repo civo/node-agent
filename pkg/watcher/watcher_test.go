@@ -6,6 +6,7 @@ import (
 
 	"github.com/civo/civogo"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -80,6 +81,72 @@ func TestIsNodeReady(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			got := isNodeReady(test.node)
+			if got != test.want {
+				t.Errorf("got = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestIsNodeDesiredGPU(t *testing.T) {
+	type test struct {
+		name    string
+		node    *corev1.Node
+		desired int
+		want    bool
+	}
+
+	tests := []test{
+		{
+			name: "Returns true when GPU count matches desired value",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node-01",
+				},
+				Status: corev1.NodeStatus{
+					Allocatable: corev1.ResourceList{
+						gpuResourceName: resource.MustParse("8"),
+					},
+				},
+			},
+			desired: 8,
+			want:    true,
+		},
+		{
+			name: "Returns false when GPU count is 0",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node-01",
+				},
+				Status: corev1.NodeStatus{
+					Allocatable: corev1.ResourceList{
+						gpuResourceName: resource.MustParse("0"),
+					},
+				},
+			},
+			desired: 8,
+			want:    false,
+		},
+		{
+			name: "Returns false when GPU count is less than desired value",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node-01",
+				},
+				Status: corev1.NodeStatus{
+					Allocatable: corev1.ResourceList{
+						gpuResourceName: resource.MustParse("7"),
+					},
+				},
+			},
+			desired: 8,
+			want:    false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := isNodeDesiredGPU(test.node, test.desired)
 			if got != test.want {
 				t.Errorf("got = %v, want %v", got, test.want)
 			}
