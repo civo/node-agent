@@ -10,7 +10,6 @@ import (
 	"github.com/civo/civogo"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -43,7 +42,12 @@ type watcher struct {
 }
 
 func NewWatcher(ctx context.Context, apiURL, apiKey, region, clusterID, nodePoolID, nodeDesiredGPUCount string, opts ...Option) (Watcher, error) {
-	w := new(watcher)
+	w := &watcher{
+		clusterID: clusterID,
+		apiKey:    apiKey,
+		apiURL:    apiURL,
+		region:    region,
+	}
 	for _, opt := range append(defaultOptions, opts...) {
 		opt(w)
 	}
