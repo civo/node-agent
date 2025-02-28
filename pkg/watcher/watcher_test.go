@@ -2,6 +2,8 @@ package watcher
 
 import (
 	"errors"
+	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/civo/civogo"
@@ -21,6 +23,150 @@ var (
 	testNodePoolID          = "test-node-pool"
 	testNodeDesiredGPUCount = "8"
 )
+
+func TestNew(t *testing.T) {
+	type args struct {
+		clusterID           string
+		region              string
+		apiKey              string
+		apiURL              string
+		nodePoolID          string
+		nodeDesiredGPUCount string
+		opts                []Option
+	}
+	type test struct {
+		name      string
+		args      args
+		checkFunc func(*watcher) error
+		wantErr   bool
+	}
+
+	tests := []test{
+		{
+			name: "Returns no error when given valid input",
+			args: args{
+				clusterID:           testClusterID,
+				region:              testRegion,
+				apiKey:              testApiKey,
+				apiURL:              testApiURL,
+				nodePoolID:          testNodePoolID,
+				nodeDesiredGPUCount: testNodeDesiredGPUCount,
+				opts: []Option{
+					WithKubernetesClient(fake.NewSimpleClientset()),
+					WithCivoClient(&FakeClient{}),
+				},
+			},
+			checkFunc: func(w *watcher) error {
+				if w.clusterID != testClusterID {
+					return fmt.Errorf("clusterID mismatch: got %s, want %s", w.clusterID, testClusterID)
+				}
+				if w.region != testRegion {
+					return fmt.Errorf("region mismatch: got %s, want %s", w.region, testRegion)
+				}
+				if w.apiKey != testApiKey {
+					return fmt.Errorf("apiKey mismatch: got %s, want %s", w.apiKey, testApiKey)
+				}
+				if w.apiURL != testApiURL {
+					return fmt.Errorf("apiURL mismatch: got %s, want %s", w.apiURL, testApiURL)
+				}
+
+				cnt, err := strconv.Atoi(testNodeDesiredGPUCount)
+				if err != nil {
+					return err
+				}
+				if w.nodeDesiredGPUCount != cnt {
+					return fmt.Errorf("nodeDesiredGPUCount mismatch: got %d, want %s", w.nodeDesiredGPUCount, testNodeDesiredGPUCount)
+				}
+				if w.nodeSelector == nil || w.nodeSelector.MatchLabels[nodePoolLabelKey] != testNodePoolID {
+					return fmt.Errorf("nodeSelector mismatch: got %v, want %s", w.nodeSelector, testNodePoolID)
+				}
+				if w.client == nil {
+					return fmt.Errorf("client is nil")
+				}
+				if w.civoClient == nil {
+					return fmt.Errorf("civoClient is nil")
+				}
+				return nil
+			},
+		},
+		{
+			name: "Returns an error when clusterID is missing",
+			args: args{
+				region:              testRegion,
+				apiKey:              testApiKey,
+				apiURL:              testApiURL,
+				nodePoolID:          testNodePoolID,
+				nodeDesiredGPUCount: testNodeDesiredGPUCount,
+				opts: []Option{
+					WithKubernetesClient(fake.NewSimpleClientset()),
+					WithCivoClient(&FakeClient{}),
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "Returns an error when nodeDesiredGPUCount is invalid",
+			args: args{
+				clusterID:           testClusterID,
+				region:              testRegion,
+				apiKey:              testApiKey,
+				apiURL:              testApiURL,
+				nodePoolID:          testNodePoolID,
+				nodeDesiredGPUCount: "invalid_number",
+				opts: []Option{
+					WithKubernetesClient(fake.NewSimpleClientset()),
+					WithCivoClient(&FakeClient{}),
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "Returns an error when nodeDesiredGPUCount is 0",
+			args: args{
+				clusterID:           testClusterID,
+				region:              testRegion,
+				apiKey:              testApiKey,
+				apiURL:              testApiURL,
+				nodePoolID:          testNodePoolID,
+				nodeDesiredGPUCount: "0",
+				opts: []Option{
+					WithKubernetesClient(fake.NewSimpleClientset()),
+					WithCivoClient(&FakeClient{}),
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			w, err := NewWatcher(t.Context(),
+				test.args.apiURL,
+				test.args.apiKey,
+				test.args.region,
+				test.args.clusterID,
+				test.args.nodePoolID,
+				test.args.nodeDesiredGPUCount,
+				test.args.opts...)
+			if (err != nil) != test.wantErr {
+				t.Errorf("error = %v, wantErr %v", err, test.wantErr)
+			}
+
+			if !test.wantErr {
+				if w == nil {
+					t.Errorf("expected non-nil object, but got nil")
+					return
+				}
+				obj := w.(*watcher)
+				if test.checkFunc != nil {
+					if err := test.checkFunc(obj); err != nil {
+						t.Errorf("checkFunc error: %v", err)
+					}
+				}
+			}
+		})
+	}
+}
 
 func TestRun(t *testing.T) {
 	type args struct {
