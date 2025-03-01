@@ -47,3 +47,15 @@ tolerations: []
 
 affinity: {}
 
+## your node_pool_id value can be found in the the civo kubernetes dashboard
+## https://dashboard.civo.com/kubernetes
+## choose your cluster, then click the copy link next to the node pool id
+node_pool_id: 
+
+## this value is intended to match the number of GPUs per node. 
+## if you had a 2-node cluster with 8 GPU total, you would set this value to 4 to represent the number of GPOs per node.
+desired_gpu_count:
+
+## your civo api key
+## https://dashboard.civo.com/security
+civo_api_key:

@@ -39,8 +39,8 @@ spec:
             - name: CIVO_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: civo-api-access
-                  key: api-key
+                  name: civo-node-agent
+                  key: civo-api-key
             - name: CIVO_API_URL
               valueFrom:
                 secretKeyRef:
@@ -59,13 +59,13 @@ spec:
             - name: CIVO_NODE_POOL_ID
               valueFrom:
                 secretKeyRef:
-                  name: civo-api-access
+                  name: civo-node-agent
                   key: node-pool-id
             - name: CIVO_NODE_DESIRED_GPU_COUNT
               valueFrom:
                 secretKeyRef:
-                  name: civo-api-access
-                  key: gpu-count
+                  name: civo-node-agent
+                  key: desired-gpu-count
           {{- with .Values.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
