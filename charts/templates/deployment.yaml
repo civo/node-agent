@@ -1,6 +1,3 @@
-{{- $node_pool_id := .Values.node_pool_id | required ".Values.node_pool_id is required. Please provide this value with flag `--set node_pool_id=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxxxxx`. To collect this value, select your cluster from the civo kubernetes dashboard, and use the copy next to your pool id. https://dashboard.civo.com/kubernetes" -}}
-{{- $node_desired_gpu_count := .Values.node_desired_gpu_count | required ".Values.node_desired_gpu_count is required. Please provide this value with flag `--set node_desired_gpu_count=8" -}}
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -60,24 +57,21 @@ spec:
                   name: civo-api-access
                   key: region
             - name: CIVO_NODE_POOL_ID
-              value: {{ .Values.node_pool_id }}
-            - name: CIVO_NODE_DESIRED_GPU_COUNT
-              value: {{ .Values.node_desired_gpu_count }}
-            - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: my-db-secret
-                  key: password  
+                  name: civo-api-access
+                  key: node-pool-id
+            - name: CIVO_NODE_DESIRED_GPU_COUNT
+              valueFrom:
+                secretKeyRef:
+                  name: civo-api-access
+                  key: gpu-count
           {{- with .Values.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          ports:
-            - name: http
-              containerPort: {{ .Values.service.port }}
-              protocol: TCP
           {{- with .Values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -102,3 +96,5 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+
+

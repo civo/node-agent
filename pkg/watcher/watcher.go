@@ -62,9 +62,6 @@ func NewWatcher(ctx context.Context, apiURL, apiKey, region, clusterID, nodePool
 	if err != nil {
 		return nil, fmt.Errorf("CIVO_NODE_DESIRED_GPU_COUNT has an invalid value, %s: %w", nodeDesiredGPUCount, err)
 	}
-	if n < 1 {
-		return nil, fmt.Errorf("CIVO_NODE_DESIRED_GPU_COUNT must be at least 1: %s", nodeDesiredGPUCount)
-	}
 
 	w.nodeDesiredGPUCount = n
 	w.nodeSelector = &metav1.LabelSelector{
@@ -179,10 +176,15 @@ func isNodeReady(node *corev1.Node) bool {
 }
 
 func isNodeDesiredGPU(node *corev1.Node, desired int) bool {
-	quantity := node.Status.Allocatable[gpuResourceName]
-	if quantity.IsZero() {
+	if desired == 0 {
+		return true
+	}
+
+	quantity, exists := node.Status.Allocatable[gpuResourceName]
+	if !exists || quantity.IsZero() {
 		return false
 	}
+
 	gpuCount, ok := quantity.AsInt64()
 	if !ok {
 		return false

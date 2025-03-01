@@ -4,3 +4,8 @@
 
 ## Installation
 
+export API_KEY="your-api-key"
+export NODE_POOL_ID="your-node-pool-id"
+export GPU_COUNT="your-gpu-count"
+
+kubectl patch secret civo-api-access -n kube-system --type='merge' -p='{"stringData": {"api-key-1": "'"$API_KEY"'", "node-pool-id": "'"$NODE_POOL_ID"'", "gpu-count": "'"$GPU_COUNT"'"}}'
