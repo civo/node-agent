@@ -5,17 +5,16 @@
 - A node enters the **NotReady** state.  
 - The number of available GPUs per node falls below a configured threshold.  
 
-## Installation
+## Configuration
 
-Set the required environment variables:  
+`node_pool_id` [xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxxxxx]:
+The ID of your Kubernetes node pool which you want monitored. To collect this value, go to the [civo kubernetes dashboard](https://dashboard.civo.com/kubernetes), select your cluster, and click copy next to your pool id.
+
+`node_desired_gpu_count`
+This value is intended to match the number of GPUs per node. If you had a 2-node cluster with 8 GPU total, you would set this value to 4 to represent the number of GPUs per node.
+
+# Installation
 
 ```bash
-export API_KEY="your-api-key"
-export NODE_POOL_ID="your-node-pool-id"
-export GPU_COUNT="your-gpu-count"
-
-kubectl patch secret civo-api-access -n kube-system --type='merge' \
-    -p='{"stringData": {"api-key-1": "'"$API_KEY"'", "node-pool-id": "'"$NODE_POOL_ID"'", "gpu-count": "'"$GPU_COUNT"'"}}'
-
-helm upgrade --install node-agent ./charts
+helm upgrade --install --set node_pool_id=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxxxxx --set node_desired_gpu_count=8 node-agent ./charts
 ```
