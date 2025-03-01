@@ -22,10 +22,3 @@ version: 0.1.0-rc.1
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
 appVersion: "v0.1.0"
-
-
-
-
-
-{"time":"2025-03-01T08:57:36.23950288Z","level":"ERROR","msg":"The node-agent encountered a critical error and will exit","clusterID":"4f9d00d8-3f4a-41cc-9ca9-30f3710e0564","region":"nyc1","nodePoolID":"b62a8764-b4e9-4654-a2c3-7ef196749afa","error":"failed to intiliase civo client: NoAPIKeySuppliedError: no API Key supplied, this is required"}
-stream closed EOF for kube-system/node-agent-66d686bbb-wbpk5 (node-agent)
