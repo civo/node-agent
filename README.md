@@ -25,13 +25,10 @@ helm upgrade --install node-agent ./charts
 
 ## Configuration Details
 
-The following configurations are stored in the `node-agent` secret in the `kube-system` namespace
+The following configurations are stored in the `node-agent` secret in the `kube-system` namespace.
 
-`node-pool-id` [xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxxxxx]:
-The ID of your Kubernetes node pool which you want monitored. To collect this value, go to the [civo kubernetes dashboard](https://dashboard.civo.com/kubernetes), select your cluster, and click copy next to your pool id.
+`node-pool-id`: The ID of your Kubernetes node pool which you want monitored. To collect this value, go to the [civo kubernetes dashboard](https://dashboard.civo.com/kubernetes), select your cluster, and click copy next to your pool id.
 
-`desired-gpu-count`
-This value is intended to match the number of GPUs per node. If you had a 2-node cluster with 8 GPU total, you would set this value to 4 to represent the number of GPUs per node.
+`desired-gpu-count`: This value is intended to match the number of GPUs per node. If you had a 2-node cluster with 8 GPU total, you would set this value to 4 to represent the number of GPUs per node.
 
-`civo-api-key`
-The civo api key to use when automatically rebooting nodes.
+`civo-api-key`: The civo api key to use when automatically rebooting nodes. To collect this value, go to toue [civo settings security tab](https://dashboard.civo.com/security).
