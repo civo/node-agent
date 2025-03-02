@@ -6,21 +6,22 @@
 - The number of available GPUs per node falls below a configured threshold.  
 
 
-## Configure Your `civo-node-agent` Secret
+## Set Your `civo-node-agent` Secret
 
 ```
-export CIVO_DESIRED_GPU_COUNT="8"
+export CIVO_DESIRED_GPU_COUNT="12"
 export CIVO_NODE_POOL_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxxxxx"
 export CIVO_API_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-
-kubectl patch secret civo-node-agent -n kube-system --type='merge' \
+kubectl -n kube-system delete secret civo-node-agent --ignore-not-found
+kubectl -n kube-system create secret generic civo-node-agent
+kubectl -n kube-system patch secret civo-node-agent -n kube-system --type='merge' \
     -p='{"stringData": {"civo-api-key": "'"$CIVO_API_KEY"'", "node-pool-id": "'"$CIVO_NODE_POOL_ID"'", "desired-gpu-count": "'"$CIVO_DESIRED_GPU_COUNT"'"}}'
 ```
 
 ## Install `node-agent` chart
 
 ```bash
-helm upgrade --install node-agent ./charts
+helm upgrade -n kube-system --install node-agent ./charts
 ```
 
 ## Configuration Details
