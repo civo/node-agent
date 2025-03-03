@@ -122,13 +122,6 @@ func (w *watcher) setupCivoClient() error {
 		return fmt.Errorf("failed to initialise civo client: %w", err)
 	}
 
-	userAgent := &civogo.Component{
-		ID:      w.clusterID,
-		Name:    "node-agent",
-		Version: Version,
-	}
-	client.SetUserAgent(userAgent)
-
 	w.civoClient = client
 	return nil
 }
@@ -159,7 +152,13 @@ func (w *watcher) run(ctx context.Context) error {
 	}
 
 	for _, node := range nodes.Items {
-		if !isNodeDesiredGPU(&node, w.nodeDesiredGPUCount) || !isNodeReady(&node) {
+
+		instance, err := w.getInstance(node.Name)
+		if err != nil {
+			return fmt.Errorf("failed to find instance, clusterID: %s, nodeName: %s: %w", w.clusterID, node.Name, err)
+		}
+
+		if !w.isNodeDesiredGPU(instance, w.nodeDesiredGPUCount) || !isNodeReady(&node) {
 			slog.Info("Node is not ready, attempting to reboot", "node", node.GetName())
 			if err := w.rebootNode(node.GetName()); err != nil {
 				slog.Error("Failed to reboot Node", "node", node.GetName(), "error", err)
@@ -173,33 +172,30 @@ func (w *watcher) run(ctx context.Context) error {
 func isNodeReady(node *corev1.Node) bool {
 	for _, cond := range node.Status.Conditions {
 		if cond.Type == corev1.NodeReady {
-			return cond.Status == corev1.ConditionTrue
+			isReady := cond.Status == corev1.ConditionTrue
+			slog.Info("Node readiness check",
+				"node", node.Name,
+				"ready", isReady,
+			)
+			return isReady
 		}
 	}
+
+	slog.Warn("Node does not have a Ready condition", "node", node.Name)
 	return false
 }
 
-func isNodeDesiredGPU(node *corev1.Node, desired int) bool {
+func (w *watcher) isNodeDesiredGPU(node *civogo.Instance, desired int) bool {
 	if desired == 0 {
-		slog.Info("desired gpu count is set to 0", "node", node.GetName())
+		slog.Info("desired gpu count is set to 0", "node", node.Hostname)
 		return true
 	}
 
-	quantity, exists := node.Status.Allocatable[gpuResourceName]
-	if !exists || quantity.IsZero() {
-		slog.Info("read allocatable gpus", "node", node.GetName(), "count", quantity.String())
-		return false
-	}
-
-	gpuCount, ok := quantity.AsInt64()
-	if !ok {
-		return false
-	}
-	return gpuCount == int64(desired)
+	return int64(node.GPUCount) == int64(desired)
 }
 
 func (w *watcher) rebootNode(name string) error {
-	instance, err := w.civoClient.FindKubernetesClusterInstance(w.clusterID, name)
+	instance, err := w.getInstance(name)
 	if err != nil {
 		return fmt.Errorf("failed to find instance, clusterID: %s, nodeName: %s: %w", w.clusterID, name, err)
 	}
@@ -210,4 +206,12 @@ func (w *watcher) rebootNode(name string) error {
 	}
 	slog.Info("Instance is rebooting", "instanceID", instance.ID)
 	return nil
+}
+
+func (w *watcher) getInstance(name string) (*civogo.Instance, error) {
+	instance, err := w.civoClient.FindKubernetesClusterInstance(w.clusterID, name)
+	if err != nil {
+		return instance, fmt.Errorf("failed to find instance, clusterID: %s, nodeName: %s: %w", w.clusterID, name, err)
+	}
+	return instance, nil
 }

@@ -223,6 +223,13 @@ func TestRun(t *testing.T) {
 						},
 					},
 				}
+				civoClient := w.civoClient.(*FakeClient)
+				instance := &civogo.Instance{
+					ID: "instance-01",
+				}
+				civoClient.FindKubernetesClusterInstanceFunc = func(clusterID, search string) (*civogo.Instance, error) {
+					return instance, nil
+				}
 				client.Fake.PrependReactor("list", "nodes", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 					return true, nodes, nil
 				})
@@ -499,16 +506,29 @@ func TestIsNodeReady(t *testing.T) {
 }
 
 func TestIsNodeDesiredGPU(t *testing.T) {
+	type args struct {
+		nodeName string
+		opts     []Option
+	}
 	type test struct {
-		name    string
-		node    *corev1.Node
-		desired int
-		want    bool
+		name       string
+		node       *corev1.Node
+		args       args
+		desired    int
+		want       bool
+		beforeFunc func(*testing.T, *watcher)
 	}
 
 	tests := []test{
 		{
 			name: "Returns true when GPU count matches desired value",
+			args: args{
+				nodeName: "node-01",
+				opts: []Option{
+					WithKubernetesClient(fake.NewSimpleClientset()),
+					WithCivoClient(&FakeClient{}),
+				},
+			},
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "node-01",
@@ -519,26 +539,37 @@ func TestIsNodeDesiredGPU(t *testing.T) {
 					},
 				},
 			},
+			beforeFunc: func(t *testing.T, w *watcher) {
+				t.Helper()
+				client := w.civoClient.(*FakeClient)
+
+				instance := &civogo.Instance{
+					ID:       "instance-01",
+					GPUCount: 8,
+				}
+
+				client.FindKubernetesClusterInstanceFunc = func(clusterID, search string) (*civogo.Instance, error) {
+					return instance, nil
+				}
+				client.HardRebootInstanceFunc = func(id string) (*civogo.SimpleResponse, error) {
+					if instance.ID != id {
+						t.Errorf("instanceId dose not match. want: %s, but got: %s", instance.ID, id)
+					}
+					return new(civogo.SimpleResponse), nil
+				}
+			},
 			desired: 8,
 			want:    true,
 		},
 		{
-			name: "Returns false when GPU count is 0",
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "node-01",
-				},
-				Status: corev1.NodeStatus{
-					Allocatable: corev1.ResourceList{
-						gpuResourceName: resource.MustParse("0"),
-					},
+			name: "Returns false when GPU count is less than desired value",
+			args: args{
+				nodeName: "node-01",
+				opts: []Option{
+					WithKubernetesClient(fake.NewSimpleClientset()),
+					WithCivoClient(&FakeClient{}),
 				},
 			},
-			desired: 8,
-			want:    false,
-		},
-		{
-			name: "Returns false when GPU count is less than desired value",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "node-01",
@@ -549,6 +580,25 @@ func TestIsNodeDesiredGPU(t *testing.T) {
 					},
 				},
 			},
+			beforeFunc: func(t *testing.T, w *watcher) {
+				t.Helper()
+				client := w.civoClient.(*FakeClient)
+
+				instance := &civogo.Instance{
+					ID:       "instance-01",
+					GPUCount: 7,
+				}
+
+				client.FindKubernetesClusterInstanceFunc = func(clusterID, search string) (*civogo.Instance, error) {
+					return instance, nil
+				}
+				client.HardRebootInstanceFunc = func(id string) (*civogo.SimpleResponse, error) {
+					if instance.ID != id {
+						t.Errorf("instanceId dose not match. want: %s, but got: %s", instance.ID, id)
+					}
+					return new(civogo.SimpleResponse), nil
+				}
+			},
 			desired: 8,
 			want:    false,
 		},
@@ -556,7 +606,20 @@ func TestIsNodeDesiredGPU(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := isNodeDesiredGPU(test.node, test.desired)
+			w, err := NewWatcher(t.Context(),
+				testApiURL, testApiKey, testRegion, testClusterID, testNodePoolID, testNodeDesiredGPUCount, test.args.opts...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			obj := w.(*watcher)
+			if test.beforeFunc != nil {
+				test.beforeFunc(t, obj)
+			}
+
+			instance, _ := obj.getInstance(test.node.Name)
+
+			got := obj.isNodeDesiredGPU(instance, test.desired)
 			if got != test.want {
 				t.Errorf("got = %v, want %v", got, test.want)
 			}
