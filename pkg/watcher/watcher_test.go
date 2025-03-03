@@ -134,7 +134,7 @@ func TestNew(t *testing.T) {
 					WithCivoClient(&FakeClient{}),
 				},
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 	}
 

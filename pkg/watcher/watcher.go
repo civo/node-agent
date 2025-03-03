@@ -66,9 +66,6 @@ func NewWatcher(ctx context.Context, apiURL, apiKey, region, clusterID, nodePool
 	if err != nil {
 		return nil, fmt.Errorf("CIVO_NODE_DESIRED_GPU_COUNT has an invalid value, %s: %w", nodeDesiredGPUCount, err)
 	}
-	if n < 1 {
-		return nil, fmt.Errorf("CIVO_NODE_DESIRED_GPU_COUNT must be at least 1: %s", nodeDesiredGPUCount)
-	}
 
 	w.nodeDesiredGPUCount = n
 	w.nodeSelector = &metav1.LabelSelector{
@@ -122,7 +119,7 @@ func (w *watcher) setupCivoClient() error {
 
 	client, err := civogo.NewClientWithURL(w.apiKey, w.apiURL, w.region)
 	if err != nil {
-		return fmt.Errorf("failed to intiliase civo client: %w", err)
+		return fmt.Errorf("failed to initialise civo client: %w", err)
 	}
 
 	userAgent := &civogo.Component{
@@ -183,10 +180,17 @@ func isNodeReady(node *corev1.Node) bool {
 }
 
 func isNodeDesiredGPU(node *corev1.Node, desired int) bool {
-	quantity := node.Status.Allocatable[gpuResourceName]
-	if quantity.IsZero() {
+	if desired == 0 {
+		slog.Info("desired gpu count is set to 0", "node", node.GetName())
+		return true
+	}
+
+	quantity, exists := node.Status.Allocatable[gpuResourceName]
+	if !exists || quantity.IsZero() {
+		slog.Info("read allocatable gpus", "node", node.GetName(), "count", quantity.String())
 		return false
 	}
+
 	gpuCount, ok := quantity.AsInt64()
 	if !ok {
 		return false
