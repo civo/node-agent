@@ -119,7 +119,7 @@ func (w *watcher) setupCivoClient() error {
 
 	client, err := civogo.NewClientWithURL(w.apiKey, w.apiURL, w.region)
 	if err != nil {
-		return fmt.Errorf("failed to intiliase civo client: %w", err)
+		return fmt.Errorf("failed to initialise civo client: %w", err)
 	}
 
 	userAgent := &civogo.Component{
@@ -181,11 +181,13 @@ func isNodeReady(node *corev1.Node) bool {
 
 func isNodeDesiredGPU(node *corev1.Node, desired int) bool {
 	if desired == 0 {
+		slog.Info("desired gpu count is set to 0", "node", node.GetName())
 		return true
 	}
 
 	quantity, exists := node.Status.Allocatable[gpuResourceName]
 	if !exists || quantity.IsZero() {
+		slog.Info("read allocatable gpus", "node", node.GetName(), "count", quantity.String())
 		return false
 	}
 

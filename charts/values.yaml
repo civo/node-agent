@@ -2,9 +2,9 @@ replicaCount: 1
 
 
 image:
-  repository: jokesta/na
+  repository: johndietz/node-agent
   pullPolicy: IfNotPresent
-  tag: "0.17"
+  tag: "1.4"
 
 imagePullSecrets: []
 nameOverride: ""

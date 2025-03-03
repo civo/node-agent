@@ -33,3 +33,22 @@ The following configurations are stored in the `node-agent` secret in the `kube-
 `desired-gpu-count`: This value is intended to match the number of GPUs per node. If you had a 2-node cluster with 8 GPU total, you would set this value to 4 to represent the number of GPUs per node.
 
 `civo-api-key`: The civo api key to use when automatically rebooting nodes. To collect this value, go to toue [civo settings security tab](https://dashboard.civo.com/security).
+
+
+## Temp details until CI is complete
+
+To build the binary for amd64
+
+`CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build .`
+
+To build the docker image for amd64
+
+`docker buildx build --platform linux/amd64 -t johndietz/node-agent:1.4 --push .`
+
+To set the image and tag used by the chart, see the image section of the `values.yaml`
+
+```
+image:
+  repository: johndietz/node-agent
+  tag: "1.4"
+```
