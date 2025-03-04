@@ -1,6 +1,9 @@
 package watcher
 
 import (
+	"strconv"
+	"time"
+
 	"github.com/civo/civogo"
 	"k8s.io/client-go/kubernetes"
 )
@@ -8,7 +11,9 @@ import (
 // Option represents a configuration function that modifies watcher object.
 type Option func(*watcher)
 
-var defaultOptions = []Option{}
+var defaultOptions = []Option{
+	WithRebootTimeWindowMinutes("40"),
+}
 
 // WithKubernetesClient returns Option to set Kubernetes API client.
 func WithKubernetesClient(client kubernetes.Interface) Option {
@@ -33,6 +38,16 @@ func WithCivoClient(client civogo.Clienter) Option {
 	return func(w *watcher) {
 		if client != nil {
 			w.civoClient = client
+		}
+	}
+}
+
+// WithRebootTimeWindowMinutes returns Option to set reboot time window.
+func WithRebootTimeWindowMinutes(s string) Option {
+	return func(w *watcher) {
+		n, err := strconv.Atoi(s)
+		if err == nil && n > 0 {
+			w.rebootTimeWindowMinutes = time.Duration(n)
 		}
 	}
 }
