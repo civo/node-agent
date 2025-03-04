@@ -15,19 +15,22 @@ import (
 var versionInfo = flag.Bool("version", false, "Print the driver version")
 
 var (
-	apiURL              = strings.TrimSpace(os.Getenv("CIVO_API_URL"))
-	apiKey              = strings.TrimSpace(os.Getenv("CIVO_API_KEY"))
-	region              = strings.TrimSpace(os.Getenv("CIVO_REGION"))
-	clusterID           = strings.TrimSpace(os.Getenv("CIVO_CLUSTER_ID"))
-	nodePoolID          = strings.TrimSpace(os.Getenv("CIVO_NODE_POOL_ID"))
-	nodeDesiredGPUCount = strings.TrimSpace(os.Getenv("CIVO_NODE_DESIRED_GPU_COUNT"))
+	apiURL                  = strings.TrimSpace(os.Getenv("CIVO_API_URL"))
+	apiKey                  = strings.TrimSpace(os.Getenv("CIVO_API_KEY"))
+	region                  = strings.TrimSpace(os.Getenv("CIVO_REGION"))
+	clusterID               = strings.TrimSpace(os.Getenv("CIVO_CLUSTER_ID"))
+	nodePoolID              = strings.TrimSpace(os.Getenv("CIVO_NODE_POOL_ID"))
+	nodeDesiredGPUCount     = strings.TrimSpace(os.Getenv("CIVO_NODE_DESIRED_GPU_COUNT"))
+	rebootTimeWindowMinutes = strings.TrimSpace(os.Getenv("CIVO_NODE_REBOOT_TIME_WINDOW_MINUTES"))
 )
 
 func run(ctx context.Context) error {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	w, err := watcher.NewWatcher(ctx, apiURL, apiKey, region, clusterID, nodePoolID, nodeDesiredGPUCount)
+	w, err := watcher.NewWatcher(ctx, apiURL, apiKey, region, clusterID, nodePoolID, nodeDesiredGPUCount,
+		watcher.WithRebootTimeWindowMinutes(rebootTimeWindowMinutes),
+	)
 	if err != nil {
 		return err
 	}

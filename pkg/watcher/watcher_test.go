@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/civo/civogo"
 	corev1 "k8s.io/api/core/v1"
@@ -16,12 +17,13 @@ import (
 )
 
 var (
-	testClusterID           = "test-cluster-123"
-	testRegion              = "lon1"
-	testApiKey              = "test-api-key"
-	testApiURL              = "https://test.civo.com"
-	testNodePoolID          = "test-node-pool"
-	testNodeDesiredGPUCount = "8"
+	testClusterID               = "test-cluster-123"
+	testRegion                  = "lon1"
+	testApiKey                  = "test-api-key"
+	testApiURL                  = "https://test.civo.com"
+	testNodePoolID              = "test-node-pool"
+	testNodeDesiredGPUCount     = "8"
+	testRebootTimeWindowMinutes = time.Duration(40)
 )
 
 func TestNew(t *testing.T) {
@@ -54,6 +56,8 @@ func TestNew(t *testing.T) {
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithCivoClient(&FakeClient{}),
+					WithRebootTimeWindowMinutes("invalid time"), // It is invalid, but the default time (40) will be used.
+					WithRebootTimeWindowMinutes("0"),            // It is invalid, but the default time (40) will be used.
 				},
 			},
 			checkFunc: func(w *watcher) error {
@@ -85,6 +89,9 @@ func TestNew(t *testing.T) {
 				}
 				if w.civoClient == nil {
 					return fmt.Errorf("civoClient is nil")
+				}
+				if w.rebootTimeWindowMinutes != testRebootTimeWindowMinutes {
+					return fmt.Errorf("w.rebootTimeWindowMinutes mismatch: got %v, want %s", w.nodeSelector, testNodePoolID)
 				}
 				return nil
 			},
@@ -339,6 +346,49 @@ func TestRun(t *testing.T) {
 			},
 		},
 		{
+			name: "Returns nil and skips reboot when GPU count matches desired but node is not ready, and LastTransitionTime is more recent than thresholdTime",
+			args: args{
+				opts: []Option{
+					WithKubernetesClient(fake.NewSimpleClientset()),
+					WithCivoClient(&FakeClient{}),
+				},
+				nodeDesiredGPUCount: testNodeDesiredGPUCount,
+				nodePoolID:          testNodePoolID,
+			},
+			beforeFunc: func(w *watcher) {
+				t.Helper()
+				client := w.client.(*fake.Clientset)
+
+				nodes := &corev1.NodeList{
+					Items: []corev1.Node{
+						{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "node-01",
+								Labels: map[string]string{
+									nodePoolLabelKey: testNodePoolID,
+								},
+							},
+							Status: corev1.NodeStatus{
+								Conditions: []corev1.NodeCondition{
+									{
+										Type:               corev1.NodeReady,
+										Status:             corev1.ConditionFalse,
+										LastTransitionTime: metav1.NewTime(time.Now()),
+									},
+								},
+								Allocatable: corev1.ResourceList{
+									gpuResourceName: resource.MustParse("8"),
+								},
+							},
+						},
+					},
+				}
+				client.Fake.PrependReactor("list", "nodes", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nodes, nil
+				})
+			},
+		},
+		{
 			name: "Returns an error when unable to list nodes",
 			args: args{
 				opts: []Option{
@@ -425,6 +475,116 @@ func TestRun(t *testing.T) {
 			err = obj.run(t.Context())
 			if (err != nil) != test.wantErr {
 				t.Errorf("error = %v, wantErr %v", err, test.wantErr)
+			}
+		})
+	}
+}
+
+func TestIsReadyOrNotReadyStatusChangedAfter(t *testing.T) {
+	type test struct {
+		name          string
+		node          *corev1.Node
+		thresholdTime time.Time
+		want          bool
+	}
+
+	tests := []test{
+		{
+			name: "Returns true when NodeReady condition is true (Ready) and last transition time is after threshold",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node-01",
+				},
+				Status: corev1.NodeStatus{
+					Conditions: []corev1.NodeCondition{
+						{
+							Type:               corev1.NodeReady,
+							Status:             corev1.ConditionTrue,
+							LastTransitionTime: metav1.NewTime(time.Now()),
+						},
+					},
+				},
+			},
+			thresholdTime: time.Now().Add(-time.Hour),
+			want:          true,
+		},
+		{
+			name: "Returns true when NodeReady condition is false (NotReady) and last transition time is after threshold",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node-01",
+				},
+				Status: corev1.NodeStatus{
+					Conditions: []corev1.NodeCondition{
+						{
+							Type:               corev1.NodeReady,
+							Status:             corev1.ConditionFalse,
+							LastTransitionTime: metav1.NewTime(time.Now()),
+						},
+					},
+				},
+			},
+			thresholdTime: time.Now().Add(-time.Hour),
+			want:          true,
+		},
+		{
+			name: "Returns false when the latest NodeReady condition is older than thresholdTime",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node-01",
+				},
+				Status: corev1.NodeStatus{
+					Conditions: []corev1.NodeCondition{
+						{
+							Type:               corev1.NodeReady,
+							Status:             corev1.ConditionFalse,
+							LastTransitionTime: metav1.NewTime(time.Now().Add(-time.Hour)),
+						},
+					},
+				},
+			},
+			thresholdTime: time.Now(),
+			want:          false,
+		},
+		{
+			name: "Returns false when no conditions are present on the node",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node-01",
+				},
+				Status: corev1.NodeStatus{
+					Conditions: []corev1.NodeCondition{},
+				},
+			},
+			thresholdTime: time.Now().Add(-time.Hour),
+			want:          false,
+		},
+		{
+			name: "Returns false when there is only NodeDiskPressure condition",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node-01",
+				},
+				Status: corev1.NodeStatus{
+					Conditions: []corev1.NodeCondition{
+						{
+							Type:              corev1.NodeDiskPressure,
+							Status:            corev1.ConditionFalse,
+							LastHeartbeatTime: metav1.NewTime(time.Now()),
+						},
+					},
+				},
+			},
+			thresholdTime: time.Now().Add(-time.Hour),
+			want:          false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := isReadyOrNotReadyStatusChangedAfter(test.node, test.thresholdTime)
+			if got != test.want {
+				t.Errorf("got = %v, want %v", got, test.want)
 			}
 		})
 	}

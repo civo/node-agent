@@ -32,11 +32,12 @@ type watcher struct {
 	civoClient    civogo.Clienter
 	clientCfgPath string
 
-	clusterID           string
-	region              string
-	apiKey              string
-	apiURL              string
-	nodeDesiredGPUCount int
+	clusterID               string
+	region                  string
+	apiKey                  string
+	apiURL                  string
+	nodeDesiredGPUCount     int
+	rebootTimeWindowMinutes time.Duration
 
 	nodeSelector *metav1.LabelSelector
 }
@@ -158,9 +159,15 @@ func (w *watcher) run(ctx context.Context) error {
 		return err
 	}
 
+	thresholdTime := time.Now().Add(-w.rebootTimeWindowMinutes * time.Minute)
+
 	for _, node := range nodes.Items {
 		if !isNodeDesiredGPU(&node, w.nodeDesiredGPUCount) || !isNodeReady(&node) {
 			slog.Info("Node is not ready, attempting to reboot", "node", node.GetName())
+			if isReadyOrNotReadyStatusChangedAfter(&node, thresholdTime) {
+				slog.Info("Skipping reboot because Ready/NotReady status was updated recently", "node", node.GetName())
+				continue
+			}
 			if err := w.rebootNode(node.GetName()); err != nil {
 				slog.Error("Failed to reboot Node", "node", node.GetName(), "error", err)
 				return fmt.Errorf("failed to reboot node: %w", err)
@@ -168,6 +175,22 @@ func (w *watcher) run(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func isReadyOrNotReadyStatusChangedAfter(node *corev1.Node, thresholdTime time.Time) bool {
+	var lastChangedTime time.Time
+	for _, cond := range node.Status.Conditions {
+		if cond.Type == corev1.NodeReady {
+			if cond.LastTransitionTime.After(lastChangedTime) {
+				lastChangedTime = cond.LastTransitionTime.Time
+			}
+		}
+	}
+	if lastChangedTime.IsZero() {
+		slog.Error("Node is in an invalid state, NodeReady condition not found", "node", node.GetName())
+		return false
+	}
+	return lastChangedTime.After(thresholdTime)
 }
 
 func isNodeReady(node *corev1.Node) bool {
