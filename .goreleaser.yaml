@@ -17,7 +17,7 @@ builds:
 
 dockers:
   - image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Env.SHA_SHORT }}-amd64"
+      - "docker.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Env.SHA_SHORT }}-amd64"
     goos: linux
     goarch: amd64
     use: buildx
@@ -32,7 +32,7 @@ dockers:
       - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
 
   - image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Env.SHA_SHORT }}-arm64"
+      - "docker.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Env.SHA_SHORT }}-arm64"
     goos: linux
     goarch: arm64
     use: buildx
@@ -47,15 +47,15 @@ dockers:
       - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
 
 docker_manifests:
-  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Env.SHA_SHORT }}"
+  - name_template: "docker.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Env.SHA_SHORT }}"
     image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Env.SHA_SHORT }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Env.SHA_SHORT }}-arm64"
-  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:v{{ .Major }}"
+      - "docker.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Env.SHA_SHORT }}-amd64"
+      - "docker.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Env.SHA_SHORT }}-arm64"
+  - name_template: "docker.io/{{ .Env.GITHUB_REPOSITORY }}:v{{ .Major }}"
     image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Env.SHA_SHORT }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Env.SHA_SHORT }}-arm64"
-  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:latest"
+      - "docker.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Env.SHA_SHORT }}-amd64"
+      - "docker.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Env.SHA_SHORT }}-arm64"
+  - name_template: "docker.io/{{ .Env.GITHUB_REPOSITORY }}:latest"
     image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Env.SHA_SHORT }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Env.SHA_SHORT }}-arm64"
+      - "docker.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Env.SHA_SHORT }}-amd64"
+      - "docker.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Env.SHA_SHORT }}-arm64"
