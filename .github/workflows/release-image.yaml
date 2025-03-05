@@ -44,5 +44,6 @@ jobs:
           version: latest
           args: release --clean
         env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
           SHA_SHORT: ${{ env.SHA_SHORT }}
           GITHUB_REPOSITORY: ${{ github.repository }}
