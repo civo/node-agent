@@ -33,6 +33,5 @@ jobs:
           version: ~> v2
           args: release --snapshot --skip=publish --clean
         env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
           SHA_SHORT: ${{ env.SHA_SHORT }}
           GITHUB_REPOSITORY: ${{ github.repository }}
