@@ -66,6 +66,11 @@ spec:
                 secretKeyRef:
                   name: civo-node-agent
                   key: desired-gpu-count
+            - name: CIVO_NODE_REBOOT_TIME_WINDOW_MINUTES
+              valueFrom:
+                secretKeyRef:
+                  name: civo-node-agent 
+                  key: time-window
           {{- with .Values.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
@@ -98,3 +103,26 @@ spec:
       {{- end }}
 
 
+
+
+
+{"time":"2025-03-05T08:20:24.371285923Z","level":"INFO","msg":"Started the watcher process...","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c"}
+{"time":"2025-03-05T08:20:24.386712425Z","level":"INFO","msg":"Node is not ready, attempting to reboot","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c","node":"restless-darkness-49591974-57ec-6f02de-pool-619d-83bja"}
+{"time":"2025-03-05T08:20:24.386781164Z","level":"INFO","msg":"Skipping reboot because Ready/NotReady status was updated recently","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c","node":"restless-darkness-49591974-57ec-6f02de-pool-619d-83bja"}
+{"time":"2025-03-05T08:20:24.386791934Z","level":"INFO","msg":"Node is not ready, attempting to reboot","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c","node":"restless-darkness-49591974-57ec-6f02de-pool-619d-pnpyx"}
+{"time":"2025-03-05T08:20:24.386799833Z","level":"INFO","msg":"Skipping reboot because Ready/NotReady status was updated recently","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c","node":"restless-darkness-49591974-57ec-6f02de-pool-619d-pnpyx"}
+{"time":"2025-03-05T08:20:34.381067796Z","level":"INFO","msg":"Started the watcher process...","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c"}
+{"time":"2025-03-05T08:20:34.390523465Z","level":"INFO","msg":"Node is not ready, attempting to reboot","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c","node":"restless-darkness-49591974-57ec-6f02de-pool-619d-83bja"}
+{"time":"2025-03-05T08:20:34.390559875Z","level":"INFO","msg":"Skipping reboot because Ready/NotReady status was updated recently","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c","node":"restless-darkness-49591974-57ec-6f02de-pool-619d-83bja"}
+{"time":"2025-03-05T08:20:34.390570163Z","level":"INFO","msg":"Node is not ready, attempting to reboot","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c","node":"restless-darkness-49591974-57ec-6f02de-pool-619d-pnpyx"}
+{"time":"2025-03-05T08:20:34.390577994Z","level":"INFO","msg":"Skipping reboot because Ready/NotReady status was updated recently","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c","node":"restless-darkness-49591974-57ec-6f02de-pool-619d-pnpyx"}
+{"time":"2025-03-05T08:20:44.380800253Z","level":"INFO","msg":"Started the watcher process...","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c"}
+{"time":"2025-03-05T08:20:44.392600396Z","level":"INFO","msg":"Node is not ready, attempting to reboot","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c","node":"restless-darkness-49591974-57ec-6f02de-pool-619d-83bja"}
+{"time":"2025-03-05T08:20:44.392659784Z","level":"INFO","msg":"Skipping reboot because Ready/NotReady status was updated recently","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c","node":"restless-darkness-49591974-57ec-6f02de-pool-619d-83bja"}
+{"time":"2025-03-05T08:20:44.392671774Z","level":"INFO","msg":"Node is not ready, attempting to reboot","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c","node":"restless-darkness-49591974-57ec-6f02de-pool-619d-pnpyx"}
+{"time":"2025-03-05T08:20:44.392680223Z","level":"INFO","msg":"Skipping reboot because Ready/NotReady status was updated recently","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c","node":"restless-darkness-49591974-57ec-6f02de-pool-619d-pnpyx"}
+{"time":"2025-03-05T08:20:54.376457487Z","level":"INFO","msg":"Started the watcher process...","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c"}
+{"time":"2025-03-05T08:20:54.385203302Z","level":"INFO","msg":"Node is not ready, attempting to reboot","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c","node":"restless-darkness-49591974-57ec-6f02de-pool-619d-83bja"}
+{"time":"2025-03-05T08:20:54.385248721Z","level":"INFO","msg":"Skipping reboot because Ready/NotReady status was updated recently","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c","node":"restless-darkness-49591974-57ec-6f02de-pool-619d-83bja"}
+{"time":"2025-03-05T08:20:54.385260111Z","level":"INFO","msg":"Node is not ready, attempting to reboot","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c","node":"restless-darkness-49591974-57ec-6f02de-pool-619d-pnpyx"}
+{"time":"2025-03-05T08:20:54.385269621Z","level":"INFO","msg":"Skipping reboot because Ready/NotReady status was updated recently","clusterID":"c017dc74-422d-4cdc-9b2d-5063ca8dbda8","region":"lon1","nodePoolID":"1ac65455-41f0-4ed8-becf-1dbcaf4c0a7c","node":"restless-darkness-49591974-57ec-6f02de-pool-619d-pnpyx"}
