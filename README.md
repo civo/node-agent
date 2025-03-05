@@ -9,7 +9,7 @@
 ## Set Your `civo-node-agent` Secret
 
 ```
-export CIVO_DESIRED_GPU_COUNT="12"
+export CIVO_DESIRED_GPU_COUNT="8"
 export CIVO_NODE_POOL_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxxxxx"
 export CIVO_API_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 export CIVO_NODE_REBOOT_TIME_WINDOW_MINUTES="xxxx"
@@ -45,6 +45,8 @@ helm install --namespace gpu-operator nvidia-device-plugin nvdp/nvidia-device-pl
 
 ## Install `node-agent` chart
 
+You will need to clone this repository in order to have access to the charts directory that is used for installation. In your terminal, please change directory to your cloned `node-agent` repo directory, and then run:
+
 ```bash
 helm upgrade -n kube-system --install node-agent ./charts
 ```
@@ -60,21 +62,3 @@ The following configurations are stored in the `node-agent` secret in the `kube-
 `civo-api-key`: The civo api key to use when automatically rebooting nodes. To collect this value, go to toue [civo settings security tab](https://dashboard.civo.com/security).
 
 `time-window`: The time-window is the time we need to give a node after a reboot happens
-
-## Temp details until CI is complete
-
-To build the binary for amd64
-
-`CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build .`
-
-To build the docker image for amd64
-
-`docker buildx build --platform linux/amd64 -t johndietz/node-agent:1.4 --push .`
-
-To set the image and tag used by the chart, see the image section of the `values.yaml`
-
-```
-image:
-  repository: johndietz/node-agent
-  tag: "1.4"
-```
