@@ -212,20 +212,27 @@ func isNodeReady(node *corev1.Node) bool {
 
 func isNodeDesiredGPU(node *corev1.Node, desired int) bool {
 	if desired == 0 {
-		slog.Info("desired gpu count is set to 0", "node", node.GetName())
+		slog.Info("Desired GPU count is set to 0", "node", node.GetName())
 		return true
 	}
 
 	quantity, exists := node.Status.Allocatable[gpuResourceName]
 	if !exists || quantity.IsZero() {
-		slog.Info("read allocatable gpus", "node", node.GetName(), "count", quantity.String())
+		slog.Info("Allocatable GPU not found", "node", node.GetName())
 		return false
 	}
 
 	gpuCount, ok := quantity.AsInt64()
 	if !ok {
+		slog.Info("Failed to convert allocatable GPU quantity to int64", "node", node.GetName(), "quantity", quantity.String())
 		return false
 	}
+
+	slog.Info("Checking actual GPU count with desired",
+		"node", node.GetName(),
+		"actual", gpuCount,
+		"desired", strconv.Itoa(desired))
+
 	return gpuCount == int64(desired)
 }
 
