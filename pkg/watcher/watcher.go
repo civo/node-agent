@@ -186,6 +186,12 @@ func isReadyOrNotReadyStatusChangedAfter(node *corev1.Node, thresholdTime time.T
 			}
 		}
 	}
+
+	slog.Info("Checking if Ready/NotReady status has changed recently",
+		"node", node.GetName(),
+		"lastTransitionTime", lastChangedTime.String(),
+		"thresholdTime", thresholdTime.String())
+
 	if lastChangedTime.IsZero() {
 		slog.Error("Node is in an invalid state, NodeReady condition not found", "node", node.GetName())
 		return false
@@ -196,9 +202,11 @@ func isReadyOrNotReadyStatusChangedAfter(node *corev1.Node, thresholdTime time.T
 func isNodeReady(node *corev1.Node) bool {
 	for _, cond := range node.Status.Conditions {
 		if cond.Type == corev1.NodeReady {
+			slog.Info("Current Node status", "node", node.GetName(), "type", corev1.NodeReady, "status", cond.Status)
 			return cond.Status == corev1.ConditionTrue
 		}
 	}
+	slog.Info("NodeReady condition not found", "node", node.GetName())
 	return false
 }
 
@@ -231,6 +239,6 @@ func (w *watcher) rebootNode(name string) error {
 	if err != nil {
 		return fmt.Errorf("failed to reboot instance, clusterID: %s, instanceID: %s: %w", w.clusterID, instance.ID, err)
 	}
-	slog.Info("Instance is rebooting", "instanceID", instance.ID)
+	slog.Info("Instance is rebooting", "instanceID", instance.ID, "node", name)
 	return nil
 }
