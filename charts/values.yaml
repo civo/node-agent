@@ -2,9 +2,9 @@ replicaCount: 1
 
 
 image:
-  repository: jokesta/na
+  repository: civo/node-agent
   pullPolicy: IfNotPresent
-  tag: "0.27"
+  tag: "3aba5ca"
 
 imagePullSecrets: []
 nameOverride: ""

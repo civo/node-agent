@@ -19,6 +19,30 @@ kubectl -n kube-system patch secret civo-node-agent -n kube-system --type='merge
     -p='{"stringData": {"civo-api-key": "'"$CIVO_API_KEY"'", "node-pool-id": "'"$CIVO_NODE_POOL_ID"'", "desired-gpu-count": "'"$CIVO_DESIRED_GPU_COUNT"'", "time-window": "'"$CIVO_NODE_REBOOT_TIME_WINDOW_MINUTES"'" }}'
 ```
 
+## Nvidia Device Plugin Install 
+
+```bash
+kubectl create ns gpu-operator
+kubectl label namespace gpu-operator pod-security.kubernetes.io/enforce=privileged                                              
+kubectl label namespace gpu-operator pod-security.kubernetes.io/warn=privileged
+kubectl label namespace gpu-operator pod-security.kubernetes.io/audit=privileged
+```
+
+```bash
+helm repo add nvdp https://nvidia.github.io/k8s-device-plugin \
+&& helm repo update
+```
+
+```bash
+helm install --namespace gpu-operator nvidia-device-plugin nvdp/nvidia-device-plugin --create-namespace \
+        --version=0.17.0 \
+        --set gfd.enabled=true \
+        --set devicePlugin.enabled=true \
+        --set dcgm.enabled=true \
+        --set nfd.enableNodeFeatureApi=true \
+        --wait
+```
+
 ## Install `node-agent` chart
 
 ```bash
@@ -35,6 +59,7 @@ The following configurations are stored in the `node-agent` secret in the `kube-
 
 `civo-api-key`: The civo api key to use when automatically rebooting nodes. To collect this value, go to toue [civo settings security tab](https://dashboard.civo.com/security).
 
+`time-window`: The time-window is the time we need to give a node after a reboot happens
 
 ## Temp details until CI is complete
 
