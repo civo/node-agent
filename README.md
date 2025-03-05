@@ -12,10 +12,11 @@
 export CIVO_DESIRED_GPU_COUNT="12"
 export CIVO_NODE_POOL_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxxxxx"
 export CIVO_API_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+export CIVO_NODE_REBOOT_TIME_WINDOW_MINUTES="xxxx"
 kubectl -n kube-system delete secret civo-node-agent --ignore-not-found
 kubectl -n kube-system create secret generic civo-node-agent
 kubectl -n kube-system patch secret civo-node-agent -n kube-system --type='merge' \
-    -p='{"stringData": {"civo-api-key": "'"$CIVO_API_KEY"'", "node-pool-id": "'"$CIVO_NODE_POOL_ID"'", "desired-gpu-count": "'"$CIVO_DESIRED_GPU_COUNT"'"}}'
+    -p='{"stringData": {"civo-api-key": "'"$CIVO_API_KEY"'", "node-pool-id": "'"$CIVO_NODE_POOL_ID"'", "desired-gpu-count": "'"$CIVO_DESIRED_GPU_COUNT"'", "time-window": "'"$CIVO_NODE_REBOOT_TIME_WINDOW_MINUTES"'" }}'
 ```
 
 ## Install `node-agent` chart
