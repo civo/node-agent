@@ -66,6 +66,11 @@ spec:
                 secretKeyRef:
                   name: civo-node-agent
                   key: desired-gpu-count
+            - name: CIVO_NODE_REBOOT_TIME_WINDOW_MINUTES
+              valueFrom:
+                secretKeyRef:
+                  name: civo-node-agent 
+                  key: time-window
           {{- with .Values.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
@@ -96,5 +101,3 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-
-
