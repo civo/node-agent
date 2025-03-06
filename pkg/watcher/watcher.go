@@ -206,7 +206,7 @@ func isNodeReady(node *corev1.Node) bool {
 
 func isNodeDesiredGPU(node *corev1.Node, desired int) bool {
 	if desired == 0 {
-		slog.Info("Desired GPU count is set to 0, so the GPU count check was skipped", "node", node.GetName())
+		slog.Info("Desired GPU count is set to 0, so the GPU count check is skipped", "node", node.GetName())
 		return true
 	}
 
