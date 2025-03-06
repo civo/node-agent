@@ -56,7 +56,7 @@ func WithRebootTimeWindowMinutes(s string) Option {
 	}
 }
 
-// WithDesiredGPUCount returns Option to set reboot time window.
+// WithDesiredGPUCount returns Option to set desired GPU count .
 func WithDesiredGPUCount(s string) Option {
 	return func(w *watcher) {
 		n, err := strconv.Atoi(s)
