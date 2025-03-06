@@ -693,7 +693,7 @@ func TestIsNodeDesiredGPU(t *testing.T) {
 			want:    true,
 		},
 		{
-			name: "Returns true when desired GPU count is, so count check is skipped",
+			name: "Returns true when desired GPU count is 0, so count check is skipped",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "node-01",
