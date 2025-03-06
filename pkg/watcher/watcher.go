@@ -42,7 +42,7 @@ type watcher struct {
 	nodeSelector *metav1.LabelSelector
 }
 
-func NewWatcher(ctx context.Context, apiURL, apiKey, region, clusterID, nodePoolID, nodeDesiredGPUCount string, opts ...Option) (Watcher, error) {
+func NewWatcher(ctx context.Context, apiURL, apiKey, region, clusterID, nodePoolID string, opts ...Option) (Watcher, error) {
 	w := &watcher{
 		clusterID: clusterID,
 		apiKey:    apiKey,
@@ -63,12 +63,6 @@ func NewWatcher(ctx context.Context, apiURL, apiKey, region, clusterID, nodePool
 		return nil, fmt.Errorf("CIVO_API_KEY not set")
 	}
 
-	n, err := strconv.Atoi(nodeDesiredGPUCount)
-	if err != nil {
-		return nil, fmt.Errorf("CIVO_NODE_DESIRED_GPU_COUNT has an invalid value, %s: %w", nodeDesiredGPUCount, err)
-	}
-
-	w.nodeDesiredGPUCount = n
 	w.nodeSelector = &metav1.LabelSelector{
 		MatchLabels: map[string]string{
 			nodePoolLabelKey: nodePoolID,
@@ -212,7 +206,7 @@ func isNodeReady(node *corev1.Node) bool {
 
 func isNodeDesiredGPU(node *corev1.Node, desired int) bool {
 	if desired == 0 {
-		slog.Info("Desired GPU count is set to 0", "node", node.GetName())
+		slog.Info("Desired GPU count is set to 0, so the GPU count check was skipped", "node", node.GetName())
 		return true
 	}
 

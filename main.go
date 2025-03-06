@@ -28,8 +28,9 @@ func run(ctx context.Context) error {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	w, err := watcher.NewWatcher(ctx, apiURL, apiKey, region, clusterID, nodePoolID, nodeDesiredGPUCount,
+	w, err := watcher.NewWatcher(ctx, apiURL, apiKey, region, clusterID, nodePoolID,
 		watcher.WithRebootTimeWindowMinutes(rebootTimeWindowMinutes),
+		watcher.WithDesiredGPUCount(nodeDesiredGPUCount),
 	)
 	if err != nil {
 		return err

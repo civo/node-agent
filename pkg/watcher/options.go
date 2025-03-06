@@ -1,6 +1,7 @@
 package watcher
 
 import (
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -13,6 +14,7 @@ type Option func(*watcher)
 
 var defaultOptions = []Option{
 	WithRebootTimeWindowMinutes("40"),
+	WithDesiredGPUCount("0"),
 }
 
 // WithKubernetesClient returns Option to set Kubernetes API client.
@@ -48,6 +50,20 @@ func WithRebootTimeWindowMinutes(s string) Option {
 		n, err := strconv.Atoi(s)
 		if err == nil && n > 0 {
 			w.rebootTimeWindowMinutes = time.Duration(n)
+		} else {
+			slog.Info("RebootTimeWindowMinutes is invalid", "value", s)
+		}
+	}
+}
+
+// WithDesiredGPUCount returns Option to set reboot time window.
+func WithDesiredGPUCount(s string) Option {
+	return func(w *watcher) {
+		n, err := strconv.Atoi(s)
+		if err == nil && n >= 0 {
+			w.nodeDesiredGPUCount = n
+		} else {
+			slog.Info("DesiredGPUCount is invalid", "value", s)
 		}
 	}
 }

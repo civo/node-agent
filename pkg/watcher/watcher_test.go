@@ -28,13 +28,12 @@ var (
 
 func TestNew(t *testing.T) {
 	type args struct {
-		clusterID           string
-		region              string
-		apiKey              string
-		apiURL              string
-		nodePoolID          string
-		nodeDesiredGPUCount string
-		opts                []Option
+		clusterID  string
+		region     string
+		apiKey     string
+		apiURL     string
+		nodePoolID string
+		opts       []Option
 	}
 	type test struct {
 		name      string
@@ -47,17 +46,15 @@ func TestNew(t *testing.T) {
 		{
 			name: "Returns no error when given valid input",
 			args: args{
-				clusterID:           testClusterID,
-				region:              testRegion,
-				apiKey:              testApiKey,
-				apiURL:              testApiURL,
-				nodePoolID:          testNodePoolID,
-				nodeDesiredGPUCount: testNodeDesiredGPUCount,
+				clusterID:  testClusterID,
+				region:     testRegion,
+				apiKey:     testApiKey,
+				apiURL:     testApiURL,
+				nodePoolID: testNodePoolID,
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithCivoClient(&FakeClient{}),
-					WithRebootTimeWindowMinutes("invalid time"), // It is invalid, but the default time (40) will be used.
-					WithRebootTimeWindowMinutes("0"),            // It is invalid, but the default time (40) will be used.
+					WithDesiredGPUCount(testNodeDesiredGPUCount),
 				},
 			},
 			checkFunc: func(w *watcher) error {
@@ -97,51 +94,66 @@ func TestNew(t *testing.T) {
 			},
 		},
 		{
+			name: "Returns no error when input is invalid, but default value is set",
+			args: args{
+				clusterID:  testClusterID,
+				region:     testRegion,
+				apiKey:     testApiKey,
+				apiURL:     testApiURL,
+				nodePoolID: testNodePoolID,
+				opts: []Option{
+					WithKubernetesClient(fake.NewSimpleClientset()),
+					WithCivoClient(&FakeClient{}),
+					WithDesiredGPUCount("invalid"),              // It is invalid, but the default count (0) will be used.
+					WithDesiredGPUCount("-1"),                   // It is invalid, but the default count (0) will be used.
+					WithRebootTimeWindowMinutes("invalid time"), // It is invalid, but the default time (40) will be used.
+					WithRebootTimeWindowMinutes("0"),            // It is invalid, but the default time (40) will be used.
+				},
+			},
+			checkFunc: func(w *watcher) error {
+				if w.nodeDesiredGPUCount != 0 {
+					return fmt.Errorf("w.nodeDesiredGPUCount mismatch: got %d, want %d", w.nodeDesiredGPUCount, 0)
+				}
+				if w.rebootTimeWindowMinutes != testRebootTimeWindowMinutes {
+					return fmt.Errorf("w.rebootTimeWindowMinutes mismatch: got %v, want %s", w.nodeSelector, testNodePoolID)
+				}
+				return nil
+			},
+		},
+		{
+			name: "Returns no error when nodeDesiredGPUCount is 0",
+			args: args{
+				clusterID:  testClusterID,
+				region:     testRegion,
+				apiKey:     testApiKey,
+				apiURL:     testApiURL,
+				nodePoolID: testNodePoolID,
+				opts: []Option{
+					WithKubernetesClient(fake.NewSimpleClientset()),
+					WithCivoClient(&FakeClient{}),
+					WithDesiredGPUCount("0"),
+				},
+			},
+			checkFunc: func(w *watcher) error {
+				if w.nodeDesiredGPUCount != 0 {
+					return fmt.Errorf("w.nodeDesiredGPUCount mismatch: got %d, want %d", w.nodeDesiredGPUCount, 0)
+				}
+				return nil
+			},
+		},
+		{
 			name: "Returns an error when clusterID is missing",
 			args: args{
-				region:              testRegion,
-				apiKey:              testApiKey,
-				apiURL:              testApiURL,
-				nodePoolID:          testNodePoolID,
-				nodeDesiredGPUCount: testNodeDesiredGPUCount,
+				region:     testRegion,
+				apiKey:     testApiKey,
+				apiURL:     testApiURL,
+				nodePoolID: testNodePoolID,
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithCivoClient(&FakeClient{}),
 				},
 			},
 			wantErr: true,
-		},
-		{
-			name: "Returns an error when nodeDesiredGPUCount is invalid",
-			args: args{
-				clusterID:           testClusterID,
-				region:              testRegion,
-				apiKey:              testApiKey,
-				apiURL:              testApiURL,
-				nodePoolID:          testNodePoolID,
-				nodeDesiredGPUCount: "invalid_number",
-				opts: []Option{
-					WithKubernetesClient(fake.NewSimpleClientset()),
-					WithCivoClient(&FakeClient{}),
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "Returns an error when nodeDesiredGPUCount is 0",
-			args: args{
-				clusterID:           testClusterID,
-				region:              testRegion,
-				apiKey:              testApiKey,
-				apiURL:              testApiURL,
-				nodePoolID:          testNodePoolID,
-				nodeDesiredGPUCount: "0",
-				opts: []Option{
-					WithKubernetesClient(fake.NewSimpleClientset()),
-					WithCivoClient(&FakeClient{}),
-				},
-			},
-			wantErr: false,
 		},
 	}
 
@@ -153,7 +165,6 @@ func TestNew(t *testing.T) {
 				test.args.region,
 				test.args.clusterID,
 				test.args.nodePoolID,
-				test.args.nodeDesiredGPUCount,
 				test.args.opts...)
 			if (err != nil) != test.wantErr {
 				t.Errorf("error = %v, wantErr %v", err, test.wantErr)
@@ -177,9 +188,8 @@ func TestNew(t *testing.T) {
 
 func TestRun(t *testing.T) {
 	type args struct {
-		opts                []Option
-		nodeDesiredGPUCount string
-		nodePoolID          string
+		opts       []Option
+		nodePoolID string
 	}
 	type test struct {
 		name       string
@@ -195,9 +205,9 @@ func TestRun(t *testing.T) {
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithCivoClient(&FakeClient{}),
+					WithDesiredGPUCount(testNodeDesiredGPUCount),
 				},
-				nodeDesiredGPUCount: testNodeDesiredGPUCount,
-				nodePoolID:          testNodePoolID,
+				nodePoolID: testNodePoolID,
 			},
 			beforeFunc: func(w *watcher) {
 				t.Helper()
@@ -241,9 +251,9 @@ func TestRun(t *testing.T) {
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithCivoClient(&FakeClient{}),
+					WithDesiredGPUCount(testNodeDesiredGPUCount),
 				},
-				nodeDesiredGPUCount: testNodeDesiredGPUCount,
-				nodePoolID:          testNodePoolID,
+				nodePoolID: testNodePoolID,
 			},
 			beforeFunc: func(w *watcher) {
 				t.Helper()
@@ -298,9 +308,9 @@ func TestRun(t *testing.T) {
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithCivoClient(&FakeClient{}),
+					WithDesiredGPUCount(testNodeDesiredGPUCount),
 				},
-				nodeDesiredGPUCount: testNodeDesiredGPUCount,
-				nodePoolID:          testNodePoolID,
+				nodePoolID: testNodePoolID,
 			},
 			beforeFunc: func(w *watcher) {
 				t.Helper()
@@ -351,9 +361,9 @@ func TestRun(t *testing.T) {
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithCivoClient(&FakeClient{}),
+					WithDesiredGPUCount(testNodeDesiredGPUCount),
 				},
-				nodeDesiredGPUCount: testNodeDesiredGPUCount,
-				nodePoolID:          testNodePoolID,
+				nodePoolID: testNodePoolID,
 			},
 			beforeFunc: func(w *watcher) {
 				t.Helper()
@@ -394,9 +404,9 @@ func TestRun(t *testing.T) {
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithCivoClient(&FakeClient{}),
+					WithDesiredGPUCount(testNodeDesiredGPUCount),
 				},
-				nodeDesiredGPUCount: testNodeDesiredGPUCount,
-				nodePoolID:          testNodePoolID,
+				nodePoolID: testNodePoolID,
 			},
 			beforeFunc: func(w *watcher) {
 				t.Helper()
@@ -415,9 +425,9 @@ func TestRun(t *testing.T) {
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithCivoClient(&FakeClient{}),
+					WithDesiredGPUCount(testNodeDesiredGPUCount),
 				},
-				nodeDesiredGPUCount: testNodeDesiredGPUCount,
-				nodePoolID:          testNodePoolID,
+				nodePoolID: testNodePoolID,
 			},
 			beforeFunc: func(w *watcher) {
 				t.Helper()
@@ -462,7 +472,7 @@ func TestRun(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			w, err := NewWatcher(t.Context(),
-				testApiURL, testApiKey, testRegion, testClusterID, test.args.nodePoolID, test.args.nodeDesiredGPUCount, test.args.opts...)
+				testApiURL, testApiKey, testRegion, testClusterID, test.args.nodePoolID, test.args.opts...)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -683,6 +693,19 @@ func TestIsNodeDesiredGPU(t *testing.T) {
 			want:    true,
 		},
 		{
+			name: "Returns true when desired GPU count is, so count check is skipped",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node-01",
+				},
+				Status: corev1.NodeStatus{
+					Allocatable: corev1.ResourceList{},
+				},
+			},
+			desired: 0,
+			want:    true,
+		},
+		{
 			name: "Returns false when GPU count is 0",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
@@ -744,6 +767,7 @@ func TestRebootNode(t *testing.T) {
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithCivoClient(&FakeClient{}),
+					WithDesiredGPUCount(testNodeDesiredGPUCount),
 				},
 			},
 			beforeFunc: func(t *testing.T, w *watcher) {
@@ -772,6 +796,7 @@ func TestRebootNode(t *testing.T) {
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithCivoClient(&FakeClient{}),
+					WithDesiredGPUCount(testNodeDesiredGPUCount),
 				},
 			},
 			beforeFunc: func(t *testing.T, w *watcher) {
@@ -791,6 +816,7 @@ func TestRebootNode(t *testing.T) {
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithCivoClient(&FakeClient{}),
+					WithDesiredGPUCount(testNodeDesiredGPUCount),
 				},
 			},
 			beforeFunc: func(t *testing.T, w *watcher) {
@@ -818,7 +844,7 @@ func TestRebootNode(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			w, err := NewWatcher(t.Context(),
-				testApiURL, testApiKey, testRegion, testClusterID, testNodePoolID, testNodeDesiredGPUCount, test.args.opts...)
+				testApiURL, testApiKey, testRegion, testClusterID, testNodePoolID, test.args.opts...)
 			if err != nil {
 				t.Fatal(err)
 			}
