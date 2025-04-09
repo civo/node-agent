@@ -203,6 +203,7 @@ func isReadyOrNotReadyStatusChangedAfter(node *corev1.Node, thresholdTime time.T
 // is after the given threshold time. In case of delays in reboot, the
 // LastTransitionTime of node might not be updated, so it compares the latest reboot
 // time to prevent sending reboot commands multiple times.
+// NOTE: This is only effective when running with a single node-agent. If you want to run multiple instances, additional logic modifications will be required.
 func (w *watcher) isLastRebootTimeAfter(nodeName string, thresholdTime time.Time) bool {
 	v, ok := w.lastRebootTime.Load(nodeName)
 	if ok {
