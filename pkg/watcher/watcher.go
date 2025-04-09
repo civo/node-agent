@@ -39,7 +39,9 @@ type watcher struct {
 	apiURL                  string
 	nodeDesiredGPUCount     int
 	rebootTimeWindowMinutes time.Duration
-	lastRebootTime          sync.Map
+
+	// NOTE: This is only effective when running with a single node-agent. If we want to run multiple instances, additional logic modifications will be required.
+	lastRebootTimes sync.Map
 
 	nodeSelector *metav1.LabelSelector
 }
@@ -203,16 +205,25 @@ func isReadyOrNotReadyStatusChangedAfter(node *corev1.Node, thresholdTime time.T
 // is after the given threshold time. In case of delays in reboot, the
 // LastTransitionTime of node might not be updated, so it compares the latest reboot
 // time to prevent sending reboot commands multiple times.
-// NOTE: This is only effective when running with a single node-agent. If you want to run multiple instances, additional logic modifications will be required.
+// NOTE: This is only effective when running with a single node-agent. If we want to run multiple instances, additional logic modifications will be required.
 func (w *watcher) isLastRebootTimeAfter(nodeName string, thresholdTime time.Time) bool {
-	v, ok := w.lastRebootTime.Load(nodeName)
+	v, ok := w.lastRebootTimes.Load(nodeName)
 	if ok {
+		slog.Info("LastRebootTime not found", "node", nodeName)
 		return false
 	}
 	lastRebootTime, ok := v.(time.Time)
 	if !ok {
+		slog.Info("LastRebootTime is invalid, so it will be removed from the records", "node", nodeName, "value", v)
+		w.lastRebootTimes.Delete(nodeName)
 		return false
 	}
+
+	slog.Info("Checking if Ready/NotReady status has changed recently",
+		"node", nodeName,
+		"lastRebootTime", lastRebootTime.String(),
+		"thresholdTime", thresholdTime.String())
+
 	return lastRebootTime.After(thresholdTime)
 }
 
@@ -264,6 +275,6 @@ func (w *watcher) rebootNode(name string) error {
 		return fmt.Errorf("failed to reboot instance, clusterID: %s, instanceID: %s: %w", w.clusterID, instance.ID, err)
 	}
 	slog.Info("Instance is rebooting", "instanceID", instance.ID, "node", name)
-	w.lastRebootTime.Store(name, time.Now())
+	w.lastRebootTimes.Store(name, time.Now())
 	return nil
 }
