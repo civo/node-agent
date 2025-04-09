@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/civo/civogo"
@@ -38,6 +39,7 @@ type watcher struct {
 	apiURL                  string
 	nodeDesiredGPUCount     int
 	rebootTimeWindowMinutes time.Duration
+	lastRebootTime          sync.Map
 
 	nodeSelector *metav1.LabelSelector
 }
@@ -162,6 +164,10 @@ func (w *watcher) run(ctx context.Context) error {
 				slog.Info("Skipping reboot because Ready/NotReady status was updated recently", "node", node.GetName())
 				continue
 			}
+			if w.isLastRebootTimeAfter(node.GetName(), thresholdTime) {
+				slog.Info("Skipping reboot because Reboot operation was executed recently", "node", node.GetName())
+				continue
+			}
 			if err := w.rebootNode(node.GetName()); err != nil {
 				slog.Error("Failed to reboot Node", "node", node.GetName(), "error", err)
 				return fmt.Errorf("failed to reboot node: %w", err)
@@ -191,6 +197,22 @@ func isReadyOrNotReadyStatusChangedAfter(node *corev1.Node, thresholdTime time.T
 		return false
 	}
 	return lastChangedTime.After(thresholdTime)
+}
+
+// isLastRebootTimeAfter checks if the last reboot time for the specified node
+// is after the given threshold time. In case of delays in reboot, the
+// LastTransitionTime of node might not be updated, so it compares the latest reboot
+// time to prevent sending reboot commands multiple times.
+func (w *watcher) isLastRebootTimeAfter(nodeName string, thresholdTime time.Time) bool {
+	v, ok := w.lastRebootTime.Load(nodeName)
+	if ok {
+		return false
+	}
+	lastRebootTime, ok := v.(time.Time)
+	if !ok {
+		return false
+	}
+	return lastRebootTime.After(thresholdTime)
 }
 
 func isNodeReady(node *corev1.Node) bool {
@@ -241,5 +263,6 @@ func (w *watcher) rebootNode(name string) error {
 		return fmt.Errorf("failed to reboot instance, clusterID: %s, instanceID: %s: %w", w.clusterID, instance.ID, err)
 	}
 	slog.Info("Instance is rebooting", "instanceID", instance.ID, "node", name)
+	w.lastRebootTime.Store(name, time.Now())
 	return nil
 }
