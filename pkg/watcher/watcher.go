@@ -41,7 +41,7 @@ type watcher struct {
 	rebootTimeWindowMinutes time.Duration
 
 	// NOTE: This is only effective when running with a single node-agent. If we want to run multiple instances, additional logic modifications will be required.
-	lastRebootTimes sync.Map
+	lastRebootCmdTimes sync.Map
 
 	nodeSelector *metav1.LabelSelector
 }
@@ -166,8 +166,8 @@ func (w *watcher) run(ctx context.Context) error {
 				slog.Info("Skipping reboot because Ready/NotReady status was updated recently", "node", node.GetName())
 				continue
 			}
-			if w.isLastRebootTimeAfter(node.GetName(), thresholdTime) {
-				slog.Info("Skipping reboot because Reboot operation was executed recently", "node", node.GetName())
+			if w.isLastRebootCommandTimeAfter(node.GetName(), thresholdTime) {
+				slog.Info("Skipping reboot because Reboot command was executed recently", "node", node.GetName())
 				continue
 			}
 			if err := w.rebootNode(node.GetName()); err != nil {
@@ -201,30 +201,30 @@ func isReadyOrNotReadyStatusChangedAfter(node *corev1.Node, thresholdTime time.T
 	return lastChangedTime.After(thresholdTime)
 }
 
-// isLastRebootTimeAfter checks if the last reboot time for the specified node
+// isLastRebootCommandTimeAfter checks if the last reboot command time for the specified node
 // is after the given threshold time. In case of delays in reboot, the
 // LastTransitionTime of node might not be updated, so it compares the latest reboot
-// time to prevent sending reboot commands multiple times.
+// command time to prevent sending reboot commands multiple times.
 // NOTE: This is only effective when running with a single node-agent. If we want to run multiple instances, additional logic modifications will be required.
-func (w *watcher) isLastRebootTimeAfter(nodeName string, thresholdTime time.Time) bool {
-	v, ok := w.lastRebootTimes.Load(nodeName)
+func (w *watcher) isLastRebootCommandTimeAfter(nodeName string, thresholdTime time.Time) bool {
+	v, ok := w.lastRebootCmdTimes.Load(nodeName)
 	if !ok {
-		slog.Info("LastRebootTime not found", "node", nodeName)
+		slog.Info("LastRebootCommandTime not found", "node", nodeName)
 		return false
 	}
-	lastRebootTime, ok := v.(time.Time)
+	lastRebootCmdTime, ok := v.(time.Time)
 	if !ok {
-		slog.Info("LastRebootTime is invalid, so it will be removed from the records", "node", nodeName, "value", v)
-		w.lastRebootTimes.Delete(nodeName)
+		slog.Info("LastRebootCommandTime is invalid, so it will be removed from the records", "node", nodeName, "value", v)
+		w.lastRebootCmdTimes.Delete(nodeName)
 		return false
 	}
 
-	slog.Info("Checking if LastRebootTime has changed recently",
+	slog.Info("Checking if LastRebootCommandTime has changed recently",
 		"node", nodeName,
-		"lastRebootTime", lastRebootTime.String(),
+		"lastRebootCommandTime", lastRebootCmdTime.String(),
 		"thresholdTime", thresholdTime.String())
 
-	return lastRebootTime.After(thresholdTime)
+	return lastRebootCmdTime.After(thresholdTime)
 }
 
 func isNodeReady(node *corev1.Node) bool {
@@ -275,6 +275,6 @@ func (w *watcher) rebootNode(name string) error {
 		return fmt.Errorf("failed to reboot instance, clusterID: %s, instanceID: %s: %w", w.clusterID, instance.ID, err)
 	}
 	slog.Info("Instance is rebooting", "instanceID", instance.ID, "node", name)
-	w.lastRebootTimes.Store(name, time.Now())
+	w.lastRebootCmdTimes.Store(name, time.Now())
 	return nil
 }
