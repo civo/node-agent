@@ -208,7 +208,7 @@ func isReadyOrNotReadyStatusChangedAfter(node *corev1.Node, thresholdTime time.T
 // NOTE: This is only effective when running with a single node-agent. If we want to run multiple instances, additional logic modifications will be required.
 func (w *watcher) isLastRebootTimeAfter(nodeName string, thresholdTime time.Time) bool {
 	v, ok := w.lastRebootTimes.Load(nodeName)
-	if ok {
+	if !ok {
 		slog.Info("LastRebootTime not found", "node", nodeName)
 		return false
 	}
