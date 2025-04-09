@@ -369,6 +369,50 @@ func TestRun(t *testing.T) {
 				t.Helper()
 				client := w.client.(*fake.Clientset)
 
+				w.lastRebootCmdTimes.Store("node-01", time.Now())
+
+				nodes := &corev1.NodeList{
+					Items: []corev1.Node{
+						{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "node-01",
+								Labels: map[string]string{
+									nodePoolLabelKey: testNodePoolID,
+								},
+							},
+							Status: corev1.NodeStatus{
+								Conditions: []corev1.NodeCondition{
+									{
+										Type:   corev1.NodeReady,
+										Status: corev1.ConditionFalse,
+									},
+								},
+								Allocatable: corev1.ResourceList{
+									gpuResourceName: resource.MustParse("8"),
+								},
+							},
+						},
+					},
+				}
+				client.Fake.PrependReactor("list", "nodes", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nodes, nil
+				})
+			},
+		},
+		{
+			name: "Returns nil and skips reboot when GPU count matches desired but node is not ready, and LastRebootCmdTime is more recent than thresholdTime",
+			args: args{
+				opts: []Option{
+					WithKubernetesClient(fake.NewSimpleClientset()),
+					WithCivoClient(&FakeClient{}),
+					WithDesiredGPUCount(testNodeDesiredGPUCount),
+				},
+				nodePoolID: testNodePoolID,
+			},
+			beforeFunc: func(w *watcher) {
+				t.Helper()
+				client := w.client.(*fake.Clientset)
+
 				nodes := &corev1.NodeList{
 					Items: []corev1.Node{
 						{
