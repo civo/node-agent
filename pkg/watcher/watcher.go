@@ -219,7 +219,7 @@ func (w *watcher) isLastRebootTimeAfter(nodeName string, thresholdTime time.Time
 		return false
 	}
 
-	slog.Info("Checking if Ready/NotReady status has changed recently",
+	slog.Info("Checking if LastRebootTime has changed recently",
 		"node", nodeName,
 		"lastRebootTime", lastRebootTime.String(),
 		"thresholdTime", thresholdTime.String())
