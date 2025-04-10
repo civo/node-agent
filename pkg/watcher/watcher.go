@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/civo/civogo"
@@ -38,6 +39,9 @@ type watcher struct {
 	apiURL                  string
 	nodeDesiredGPUCount     int
 	rebootTimeWindowMinutes time.Duration
+
+	// NOTE: This is only effective when running with a single node-agent. If we want to run multiple instances, additional logic modifications will be required.
+	lastRebootCmdTimes sync.Map
 
 	nodeSelector *metav1.LabelSelector
 }
@@ -157,9 +161,21 @@ func (w *watcher) run(ctx context.Context) error {
 
 	for _, node := range nodes.Items {
 		if !isNodeDesiredGPU(&node, w.nodeDesiredGPUCount) || !isNodeReady(&node) {
+
+			// LTT:  LastTransitionTime of node.
+			// LRCT: LastRebootCmdTimes
+			// 60:   Threshold time (example)
+			// - LTT > 60 , LRCT < 60 dont reboot
+			// - LTT < 60 , LRCT < 60 dont reboot
+			// - LTT < 60 , LRCT > 60 dont reboot
+			// - LTT > 60, LRCT >. 60 reboot
 			slog.Info("Node is not ready, attempting to reboot", "node", node.GetName())
 			if isReadyOrNotReadyStatusChangedAfter(&node, thresholdTime) {
 				slog.Info("Skipping reboot because Ready/NotReady status was updated recently", "node", node.GetName())
+				continue
+			}
+			if w.isLastRebootCommandTimeAfter(node.GetName(), thresholdTime) {
+				slog.Info("Skipping reboot because Reboot command was executed recently", "node", node.GetName())
 				continue
 			}
 			if err := w.rebootNode(node.GetName()); err != nil {
@@ -191,6 +207,32 @@ func isReadyOrNotReadyStatusChangedAfter(node *corev1.Node, thresholdTime time.T
 		return false
 	}
 	return lastChangedTime.After(thresholdTime)
+}
+
+// isLastRebootCommandTimeAfter checks if the last reboot command time for the specified node
+// is after the given threshold time. In case of delays in reboot, the
+// LastTransitionTime of node might not be updated, so it compares the latest reboot
+// command time to prevent sending reboot commands multiple times.
+// NOTE: This is only effective when running with a single node-agent. If we want to run multiple instances, additional logic modifications will be required.
+func (w *watcher) isLastRebootCommandTimeAfter(nodeName string, thresholdTime time.Time) bool {
+	v, ok := w.lastRebootCmdTimes.Load(nodeName)
+	if !ok {
+		slog.Info("LastRebootCommandTime not found", "node", nodeName)
+		return false
+	}
+	lastRebootCmdTime, ok := v.(time.Time)
+	if !ok {
+		slog.Info("LastRebootCommandTime is invalid, so it will be removed from the records", "node", nodeName, "value", v)
+		w.lastRebootCmdTimes.Delete(nodeName)
+		return false
+	}
+
+	slog.Info("Checking if LastRebootCommandTime has changed recently",
+		"node", nodeName,
+		"lastRebootCommandTime", lastRebootCmdTime.String(),
+		"thresholdTime", thresholdTime.String())
+
+	return lastRebootCmdTime.After(thresholdTime)
 }
 
 func isNodeReady(node *corev1.Node) bool {
@@ -241,5 +283,6 @@ func (w *watcher) rebootNode(name string) error {
 		return fmt.Errorf("failed to reboot instance, clusterID: %s, instanceID: %s: %w", w.clusterID, instance.ID, err)
 	}
 	slog.Info("Instance is rebooting", "instanceID", instance.ID, "node", name)
+	w.lastRebootCmdTimes.Store(name, time.Now())
 	return nil
 }

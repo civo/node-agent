@@ -369,6 +369,50 @@ func TestRun(t *testing.T) {
 				t.Helper()
 				client := w.client.(*fake.Clientset)
 
+				w.lastRebootCmdTimes.Store("node-01", time.Now())
+
+				nodes := &corev1.NodeList{
+					Items: []corev1.Node{
+						{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "node-01",
+								Labels: map[string]string{
+									nodePoolLabelKey: testNodePoolID,
+								},
+							},
+							Status: corev1.NodeStatus{
+								Conditions: []corev1.NodeCondition{
+									{
+										Type:   corev1.NodeReady,
+										Status: corev1.ConditionFalse,
+									},
+								},
+								Allocatable: corev1.ResourceList{
+									gpuResourceName: resource.MustParse("8"),
+								},
+							},
+						},
+					},
+				}
+				client.Fake.PrependReactor("list", "nodes", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nodes, nil
+				})
+			},
+		},
+		{
+			name: "Returns nil and skips reboot when GPU count matches desired but node is not ready, and LastRebootCmdTime is more recent than thresholdTime",
+			args: args{
+				opts: []Option{
+					WithKubernetesClient(fake.NewSimpleClientset()),
+					WithCivoClient(&FakeClient{}),
+					WithDesiredGPUCount(testNodeDesiredGPUCount),
+				},
+				nodePoolID: testNodePoolID,
+			},
+			beforeFunc: func(w *watcher) {
+				t.Helper()
+				client := w.client.(*fake.Clientset)
+
 				nodes := &corev1.NodeList{
 					Items: []corev1.Node{
 						{
@@ -593,6 +637,88 @@ func TestIsReadyOrNotReadyStatusChangedAfter(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			got := isReadyOrNotReadyStatusChangedAfter(test.node, test.thresholdTime)
+			if got != test.want {
+				t.Errorf("got = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestIsLastRebootCommandTimeAfter(t *testing.T) {
+	type test struct {
+		name          string
+		nodeName      string
+		opts          []Option
+		thresholdTime time.Time
+		beforeFunc    func(*watcher)
+		want          bool
+	}
+
+	tests := []test{
+		{
+			name: "Return true when last reboot command time is after threshold",
+			opts: []Option{
+				WithKubernetesClient(fake.NewSimpleClientset()),
+				WithCivoClient(&FakeClient{}),
+			},
+			nodeName:      "node-01",
+			thresholdTime: time.Now().Add(-time.Hour),
+			beforeFunc: func(w *watcher) {
+				w.lastRebootCmdTimes.Store("node-01", time.Now())
+			},
+			want: true,
+		},
+		{
+			name: "Return false when last reboot command time is before threshold",
+			opts: []Option{
+				WithKubernetesClient(fake.NewSimpleClientset()),
+				WithCivoClient(&FakeClient{}),
+			},
+			nodeName:      "node-01",
+			thresholdTime: time.Now().Add(-time.Hour),
+			beforeFunc: func(w *watcher) {
+				w.lastRebootCmdTimes.Store("nodde-01", time.Now().Add(-2*time.Hour))
+			},
+			want: false,
+		},
+		{
+			name: "Return false when last reboot command time not found",
+			opts: []Option{
+				WithKubernetesClient(fake.NewSimpleClientset()),
+				WithCivoClient(&FakeClient{}),
+			},
+			nodeName:      "node-01",
+			thresholdTime: time.Now().Add(-time.Hour),
+			want:          false,
+		},
+		{
+			name: "Return false when type of last reboot command time is invalid",
+			opts: []Option{
+				WithKubernetesClient(fake.NewSimpleClientset()),
+				WithCivoClient(&FakeClient{}),
+			},
+			nodeName:      "node-01",
+			thresholdTime: time.Now().Add(-time.Hour),
+			beforeFunc: func(w *watcher) {
+				w.lastRebootCmdTimes.Store("nodde-01", "invalid-type")
+			},
+			want: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			w, err := NewWatcher(t.Context(),
+				testApiURL, testApiKey, testRegion, testClusterID, testNodePoolID, test.opts...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			obj := w.(*watcher)
+			if test.beforeFunc != nil {
+				test.beforeFunc(obj)
+			}
+			got := obj.isLastRebootCommandTimeAfter(test.nodeName, test.thresholdTime)
 			if got != test.want {
 				t.Errorf("got = %v, want %v", got, test.want)
 			}
