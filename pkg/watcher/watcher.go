@@ -162,8 +162,9 @@ func (w *watcher) run(ctx context.Context) error {
 	for _, node := range nodes.Items {
 		if !isNodeDesiredGPU(&node, w.nodeDesiredGPUCount) || !isNodeReady(&node) {
 
-			// LTT: LastTransitionTime of node.
+			// LTT:  LastTransitionTime of node.
 			// LRCT: LastRebootCmdTimes
+			// 60:   Threshold time (example)
 			// - LTT > 60 , LRCT < 60 dont reboot
 			// - LTT < 60 , LRCT < 60 dont reboot
 			// - LTT < 60 , LRCT > 60 dont reboot
