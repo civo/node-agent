@@ -161,6 +161,13 @@ func (w *watcher) run(ctx context.Context) error {
 
 	for _, node := range nodes.Items {
 		if !isNodeDesiredGPU(&node, w.nodeDesiredGPUCount) || !isNodeReady(&node) {
+
+			// LTT: LastTransitionTime of node.
+			// LRCT: LastRebootCmdTimes
+			// - LTT > 60 , LRCT < 60 dont reboot
+			// - LTT < 60 , LRCT < 60 dont reboot
+			// - LTT < 60 , LRCT > 60 dont reboot
+			// - LTT > 60, LRCT >. 60 reboot
 			slog.Info("Node is not ready, attempting to reboot", "node", node.GetName())
 			if isReadyOrNotReadyStatusChangedAfter(&node, thresholdTime) {
 				slog.Info("Skipping reboot because Ready/NotReady status was updated recently", "node", node.GetName())
