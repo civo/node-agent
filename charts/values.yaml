@@ -4,7 +4,7 @@ replicaCount: 1
 image:
   repository: civo/node-agent
   pullPolicy: IfNotPresent
-  tag: "3aba5ca"
+  tag: "6b8426a"
 
 imagePullSecrets: []
 nameOverride: ""
