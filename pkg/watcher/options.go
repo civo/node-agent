@@ -15,7 +15,8 @@ import (
 type Option func(*watcher)
 
 var defaultOptions = []Option{
-	WithRebootTimeWindowMinutes("40"),
+	WithRebootWaitMinutes("10"),
+	WithGPURebootWaitMinutes("40"),
 }
 
 // WithKubernetesClient returns Option to set Kubernetes API client.
@@ -47,14 +48,26 @@ func WithNodePoolIDs(ids []string) Option {
 	}
 }
 
-// WithRebootTimeWindowMinutes returns Option to set reboot time window.
-func WithRebootTimeWindowMinutes(s string) Option {
+// WithRebootWaitMinutes returns Option to set the reboot wait time for standard nodes.
+func WithRebootWaitMinutes(s string) Option {
 	return func(w *watcher) {
 		n, err := strconv.Atoi(s)
 		if err == nil && n > 0 {
-			w.rebootTimeWindowMinutes = time.Duration(n)
+			w.rebootWaitMinutes = time.Duration(n)
 		} else {
-			slog.Info("RebootTimeWindowMinutes is invalid", "value", s)
+			slog.Info("RebootWaitMinutes is invalid", "value", s)
+		}
+	}
+}
+
+// WithGPURebootWaitMinutes returns Option to set the reboot wait time for GPU nodes.
+func WithGPURebootWaitMinutes(s string) Option {
+	return func(w *watcher) {
+		n, err := strconv.Atoi(s)
+		if err == nil && n > 0 {
+			w.gpuRebootWaitMinutes = time.Duration(n)
+		} else {
+			slog.Info("GPURebootWaitMinutes is invalid", "value", s)
 		}
 	}
 }

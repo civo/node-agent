@@ -66,8 +66,8 @@ func (c *alwaysFailChecker) Threshold() time.Duration { return c.threshold }
 // --- Test variables ---
 
 var (
-	testNodePoolID              = "test-node-pool"
-	testRebootTimeWindowMinutes = time.Duration(40)
+	testNodePoolID        = "test-node-pool"
+	testRebootWaitMinutes = time.Duration(10)
 )
 
 // newTestNode creates a node for testing with common defaults.
@@ -139,8 +139,8 @@ func TestNew(t *testing.T) {
 				if w.client == nil {
 					return fmt.Errorf("client is nil")
 				}
-				if w.rebootTimeWindowMinutes != testRebootTimeWindowMinutes {
-					return fmt.Errorf("rebootTimeWindowMinutes mismatch: got %v, want %v", w.rebootTimeWindowMinutes, testRebootTimeWindowMinutes)
+				if w.rebootWaitMinutes != testRebootWaitMinutes {
+					return fmt.Errorf("rebootTimeWindowMinutes mismatch: got %v, want %v", w.rebootWaitMinutes, testRebootWaitMinutes)
 				}
 				if !w.monitorOnly {
 					return fmt.Errorf("monitorOnly should default to true")
@@ -160,13 +160,13 @@ func TestNew(t *testing.T) {
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithExecutor(&mockExecutor{}),
-					WithRebootTimeWindowMinutes("invalid time"),
-					WithRebootTimeWindowMinutes("0"),
+					WithRebootWaitMinutes("invalid time"),
+					WithRebootWaitMinutes("0"),
 				},
 			},
 			checkFunc: func(w *watcher) error {
-				if w.rebootTimeWindowMinutes != testRebootTimeWindowMinutes {
-					return fmt.Errorf("rebootTimeWindowMinutes mismatch: got %v, want %v", w.rebootTimeWindowMinutes, testRebootTimeWindowMinutes)
+				if w.rebootWaitMinutes != testRebootWaitMinutes {
+					return fmt.Errorf("rebootTimeWindowMinutes mismatch: got %v, want %v", w.rebootWaitMinutes, testRebootWaitMinutes)
 				}
 				return nil
 			},
@@ -359,7 +359,7 @@ func TestRun_RebootRetry(t *testing.T) {
 		WithCheckers(health.NewDefaultCheckers()),
 		WithExecutor(exec),
 		WithMonitorOnly(false),
-		WithRebootTimeWindowMinutes("40"),
+		WithGPURebootWaitMinutes("40"),
 		WithNowFunc(func() time.Time { return now }),
 	)
 
@@ -367,7 +367,7 @@ func TestRun_RebootRetry(t *testing.T) {
 	if err := w.run(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	// Run 2: trigger first reboot.
+	// Run 2: trigger first reboot (GPU checker threshold is 10min).
 	now = now.Add(11 * time.Minute)
 	if err := w.run(t.Context()); err != nil {
 		t.Fatal(err)
@@ -515,7 +515,7 @@ func TestRun_UnhealthyWithinThresholdNoReboot(t *testing.T) {
 	}
 
 	// Run 2: still within threshold → no reboot.
-	now = now.Add(5 * time.Minute)
+	now = now.Add(3 * time.Minute)
 	if err := w.run(t.Context()); err != nil {
 		t.Fatal(err)
 	}

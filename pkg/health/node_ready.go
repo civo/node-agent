@@ -10,7 +10,7 @@ import (
 type nodeReadyChecker struct{}
 
 func (c *nodeReadyChecker) Name() string             { return "NodeReady" }
-func (c *nodeReadyChecker) Threshold() time.Duration { return 10 * time.Minute }
+func (c *nodeReadyChecker) Threshold() time.Duration { return 5 * time.Minute }
 
 func (c *nodeReadyChecker) Check(node *corev1.Node) bool {
 	for _, cond := range node.Status.Conditions {

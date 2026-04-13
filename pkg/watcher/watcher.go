@@ -31,8 +31,9 @@ type watcher struct {
 	client        kubernetes.Interface
 	clientCfgPath string
 
-	nodePoolIDs             []string
-	rebootTimeWindowMinutes time.Duration
+	nodePoolIDs          []string
+	rebootWaitMinutes    time.Duration // Standard nodes (default: 10)
+	gpuRebootWaitMinutes time.Duration // GPU nodes (default: 40)
 
 	nodeSelector *metav1.LabelSelector
 	nodeLister   listerscorev1.NodeLister
@@ -226,7 +227,11 @@ func (w *watcher) run(ctx context.Context) error {
 		case PhaseWaitingReboot:
 			metrics.NodeUnhealthyDurationSeconds.WithLabelValues(nodeName).Set(
 				now.Sub(state.UnhealthySince()).Seconds())
-			if now.Sub(state.LastRebootTime()) < w.rebootTimeWindowMinutes*time.Minute {
+			rebootWait := w.rebootWaitMinutes
+			if state.IsGPUNode() {
+				rebootWait = w.gpuRebootWaitMinutes
+			}
+			if now.Sub(state.LastRebootTime()) < rebootWait*time.Minute {
 				continue
 			}
 			if !w.monitorOnly {

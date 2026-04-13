@@ -25,14 +25,15 @@ var (
 )
 
 var (
-	apiURL                  = strings.TrimSpace(os.Getenv("CIVO_API_URL"))
-	apiKey                  = strings.TrimSpace(os.Getenv("CIVO_API_KEY"))
-	region                  = strings.TrimSpace(os.Getenv("CIVO_REGION"))
-	clusterID               = strings.TrimSpace(os.Getenv("CIVO_CLUSTER_ID"))
-	nodePoolID              = strings.TrimSpace(os.Getenv("CIVO_NODE_POOL_ID"))
-	rebootTimeWindowMinutes = strings.TrimSpace(os.Getenv("CIVO_NODE_REBOOT_TIME_WINDOW_MINUTES"))
-	monitorOnly             = strings.TrimSpace(os.Getenv("CIVO_NODE_AGENT_MONITOR_ONLY"))
-	metricsPort             = strings.TrimSpace(os.Getenv("CIVO_NODE_AGENT_METRICS_PORT"))
+	apiURL               = strings.TrimSpace(os.Getenv("CIVO_API_URL"))
+	apiKey               = strings.TrimSpace(os.Getenv("CIVO_API_KEY"))
+	region               = strings.TrimSpace(os.Getenv("CIVO_REGION"))
+	clusterID            = strings.TrimSpace(os.Getenv("CIVO_CLUSTER_ID"))
+	nodePoolID           = strings.TrimSpace(os.Getenv("CIVO_NODE_POOL_ID"))
+	rebootWaitMinutes    = strings.TrimSpace(os.Getenv("CIVO_NODE_REBOOT_WAIT_MINUTES"))
+	gpuRebootWaitMinutes = strings.TrimSpace(os.Getenv("CIVO_GPU_NODE_REBOOT_WAIT_MINUTES"))
+	monitorOnly          = strings.TrimSpace(os.Getenv("CIVO_NODE_AGENT_MONITOR_ONLY"))
+	metricsPort          = strings.TrimSpace(os.Getenv("CIVO_NODE_AGENT_METRICS_PORT"))
 )
 
 const (
@@ -75,7 +76,8 @@ func run(ctx context.Context) error {
 		watcher.WithExecutor(executor),
 		watcher.WithCheckers(checkers),
 		watcher.WithMonitorOnly(monitorOnlyFlag),
-		watcher.WithRebootTimeWindowMinutes(rebootTimeWindowMinutes),
+		watcher.WithRebootWaitMinutes(rebootWaitMinutes),
+		watcher.WithGPURebootWaitMinutes(gpuRebootWaitMinutes),
 	)
 	if err != nil {
 		return err
