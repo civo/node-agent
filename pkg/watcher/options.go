@@ -16,6 +16,7 @@ import (
 type Option func(*watcher)
 
 var defaultOptions = []Option{
+	WithMonitorOnly("true"),
 	WithRebootWaitMinutes("10"),
 	WithGPURebootWaitMinutes("40"),
 }
