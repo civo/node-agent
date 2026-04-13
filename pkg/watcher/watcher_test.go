@@ -68,7 +68,6 @@ func (c *alwaysFailChecker) Threshold() time.Duration { return c.threshold }
 var (
 	testClusterID               = "test-cluster-123"
 	testNodePoolID              = "test-node-pool"
-	testNodeDesiredGPUCount     = "8"
 	testRebootTimeWindowMinutes = time.Duration(40)
 )
 
@@ -135,19 +134,11 @@ func TestNew(t *testing.T) {
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithExecutor(&mockExecutor{}),
-					WithDesiredGPUCount(testNodeDesiredGPUCount),
 				},
 			},
 			checkFunc: func(w *watcher) error {
 				if w.clusterID != testClusterID {
 					return fmt.Errorf("clusterID mismatch: got %s, want %s", w.clusterID, testClusterID)
-				}
-				cnt, err := strconv.Atoi(testNodeDesiredGPUCount)
-				if err != nil {
-					return err
-				}
-				if w.nodeDesiredGPUCount != cnt {
-					return fmt.Errorf("nodeDesiredGPUCount mismatch: got %d, want %d", w.nodeDesiredGPUCount, cnt)
 				}
 				if w.nodeSelector == nil || w.nodeSelector.MatchLabels[nodePoolLabelKey] != testNodePoolID {
 					return fmt.Errorf("nodeSelector mismatch: got %v, want %s", w.nodeSelector, testNodePoolID)
@@ -178,16 +169,11 @@ func TestNew(t *testing.T) {
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithExecutor(&mockExecutor{}),
-					WithDesiredGPUCount("invalid"),
-					WithDesiredGPUCount("-1"),
 					WithRebootTimeWindowMinutes("invalid time"),
 					WithRebootTimeWindowMinutes("0"),
 				},
 			},
 			checkFunc: func(w *watcher) error {
-				if w.nodeDesiredGPUCount != 0 {
-					return fmt.Errorf("nodeDesiredGPUCount mismatch: got %d, want %d", w.nodeDesiredGPUCount, 0)
-				}
 				if w.rebootTimeWindowMinutes != testRebootTimeWindowMinutes {
 					return fmt.Errorf("rebootTimeWindowMinutes mismatch: got %v, want %v", w.rebootTimeWindowMinutes, testRebootTimeWindowMinutes)
 				}

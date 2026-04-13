@@ -9,7 +9,7 @@ import (
 )
 
 func TestGPUChecker_Name(t *testing.T) {
-	c := NewGPUChecker(8)
+	c := &gpuChecker{desiredCount: 8}
 	if got := c.Name(); got != "GPU" {
 		t.Errorf("got %q, want %q", got, "GPU")
 	}
@@ -87,7 +87,7 @@ func TestGPUChecker_Check(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := NewGPUChecker(tt.desired)
+			c := &gpuChecker{desiredCount: tt.desired}
 			if got := c.Check(tt.node); got != tt.want {
 				t.Errorf("got %v, want %v", got, tt.want)
 			}

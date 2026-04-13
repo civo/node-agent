@@ -19,8 +19,9 @@ import (
 )
 
 var (
-	version     = "0.0.1"
-	versionInfo = flag.Bool("version", false, "Print the driver version")
+	version        = "0.0.1"
+	versionInfo    = flag.Bool("version", false, "Print the driver version")
+	kubeconfigPath = flag.String("kubeconfig", "/etc/rancher/k3s/k3s.yaml", "Path to kubeconfig file (empty for in-cluster config)")
 )
 
 var (
@@ -70,11 +71,11 @@ func run(ctx context.Context) error {
 	}()
 
 	w, err := watcher.NewWatcher(ctx, clusterID, nodePoolID,
+		watcher.WithKubernetesClientConfigPath(*kubeconfigPath),
 		watcher.WithExecutor(executor),
 		watcher.WithCheckers(checkers),
 		watcher.WithMonitorOnly(monitorOnlyFlag),
 		watcher.WithRebootTimeWindowMinutes(rebootTimeWindowMinutes),
-		watcher.WithDesiredGPUCount(nodeDesiredGPUCount),
 	)
 	if err != nil {
 		return err

@@ -14,11 +14,6 @@ type gpuChecker struct {
 	desiredCount int
 }
 
-// NewGPUChecker creates a HealthChecker that verifies the node's allocatable GPU count.
-func NewGPUChecker(desiredCount int) HealthChecker {
-	return &gpuChecker{desiredCount: desiredCount}
-}
-
 func (c *gpuChecker) Name() string             { return "GPU" }
 func (c *gpuChecker) Threshold() time.Duration { return 10 * time.Minute }
 

@@ -34,7 +34,6 @@ type watcher struct {
 	clientCfgPath string
 
 	clusterID               string
-	nodeDesiredGPUCount     int
 	rebootTimeWindowMinutes time.Duration
 
 	nodeSelector *metav1.LabelSelector
