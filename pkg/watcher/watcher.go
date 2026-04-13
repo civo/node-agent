@@ -234,6 +234,12 @@ func (w *watcher) run(ctx context.Context) error {
 			if now.Sub(state.LastRebootTime()) < rebootWait*time.Minute {
 				continue
 			}
+
+			// TODO: Standard nodes should transition to PhaseDrain → PhaseReplace
+			// instead of retrying reboot indefinitely.
+			// GPU nodes must never be replaced; they retry reboot only.
+			// See: Recovery Flow — Standard Nodes (Drain → timeout 30min → Replace)
+
 			if !w.monitorOnly {
 				if err := w.executor.Reboot(ctx, nodeName); err != nil {
 					slog.Error("Failed to reboot node (retry)", "node", nodeName, "error", err)
