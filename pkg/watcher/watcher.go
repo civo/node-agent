@@ -34,6 +34,7 @@ type watcher struct {
 	clientCfgPath string
 
 	clusterID               string
+	nodePoolIDs             []string
 	rebootTimeWindowMinutes time.Duration
 
 	nodeSelector *metav1.LabelSelector
@@ -46,7 +47,7 @@ type watcher struct {
 	nowFunc     func() time.Time
 }
 
-func NewWatcher(ctx context.Context, clusterID string, nodePoolIDs []string, opts ...Option) (Watcher, error) {
+func NewWatcher(ctx context.Context, clusterID string, opts ...Option) (Watcher, error) {
 	w := &watcher{
 		clusterID:   clusterID,
 		monitorOnly: true,
@@ -61,7 +62,7 @@ func NewWatcher(ctx context.Context, clusterID string, nodePoolIDs []string, opt
 		return nil, fmt.Errorf("cluster ID must not be empty")
 	}
 
-	w.nodeSelector = buildNodeSelector(nodePoolIDs)
+	w.nodeSelector = buildNodeSelector(w.nodePoolIDs)
 
 	if err := w.setupKubernetesClient(); err != nil {
 		return nil, err

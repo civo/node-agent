@@ -103,7 +103,7 @@ func newTestWatcher(t *testing.T, opts ...Option) *watcher {
 		WithExecutor(&mockExecutor{}),
 	}
 	w, err := NewWatcher(t.Context(),
-		testClusterID, []string{testNodePoolID},
+		testClusterID,
 		append(baseOpts, opts...)...)
 	if err != nil {
 		t.Fatal(err)
@@ -115,9 +115,8 @@ func newTestWatcher(t *testing.T, opts ...Option) *watcher {
 
 func TestNew(t *testing.T) {
 	type args struct {
-		clusterID   string
-		nodePoolIDs []string
-		opts        []Option
+		clusterID string
+		opts      []Option
 	}
 	type test struct {
 		name      string
@@ -130,11 +129,11 @@ func TestNew(t *testing.T) {
 		{
 			name: "Returns no error when given valid input",
 			args: args{
-				clusterID:   testClusterID,
-				nodePoolIDs: []string{testNodePoolID},
+				clusterID: testClusterID,
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithExecutor(&mockExecutor{}),
+					WithNodePoolIDs([]string{testNodePoolID}),
 				},
 			},
 			checkFunc: func(w *watcher) error {
@@ -165,8 +164,8 @@ func TestNew(t *testing.T) {
 		{
 			name: "Returns no error when input is invalid, but default value is set",
 			args: args{
-				clusterID:   testClusterID,
-				nodePoolIDs: []string{testNodePoolID},
+				clusterID: testClusterID,
+
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithExecutor(&mockExecutor{}),
@@ -184,7 +183,7 @@ func TestNew(t *testing.T) {
 		{
 			name: "Returns an error when clusterID is missing",
 			args: args{
-				nodePoolIDs: []string{testNodePoolID},
+
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithExecutor(&mockExecutor{}),
@@ -198,7 +197,6 @@ func TestNew(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			w, err := NewWatcher(t.Context(),
 				test.args.clusterID,
-				test.args.nodePoolIDs,
 				test.args.opts...)
 			if (err != nil) != test.wantErr {
 				t.Errorf("error = %v, wantErr %v", err, test.wantErr)

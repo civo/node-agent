@@ -36,6 +36,17 @@ func WithKubernetesClientConfigPath(path string) Option {
 	}
 }
 
+// WithNodePoolIDs returns Option to append node pool IDs to watch.
+// Can be called multiple times to accumulate IDs.
+// If no IDs are provided across all calls, all nodes are watched.
+func WithNodePoolIDs(ids []string) Option {
+	return func(w *watcher) {
+		if len(ids) > 0 {
+			w.nodePoolIDs = append(w.nodePoolIDs, ids...)
+		}
+	}
+}
+
 // WithRebootTimeWindowMinutes returns Option to set reboot time window.
 func WithRebootTimeWindowMinutes(s string) Option {
 	return func(w *watcher) {

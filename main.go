@@ -69,7 +69,8 @@ func run(ctx context.Context) error {
 		}
 	}()
 
-	w, err := watcher.NewWatcher(ctx, clusterID, parseNodePoolIDs(nodePoolID),
+	w, err := watcher.NewWatcher(ctx, clusterID,
+		watcher.WithNodePoolIDs(parseNodePoolIDs(nodePoolID)),
 		watcher.WithKubernetesClientConfigPath(*kubeconfigPath),
 		watcher.WithExecutor(executor),
 		watcher.WithCheckers(checkers),
