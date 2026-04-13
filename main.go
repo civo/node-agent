@@ -51,11 +51,6 @@ func run(ctx context.Context) error {
 	}
 	checkers := health.NewDefaultCheckers()
 
-	monitorOnlyFlag := true
-	if v, err := strconv.ParseBool(monitorOnly); err == nil {
-		monitorOnlyFlag = v
-	}
-
 	metrics.Register()
 	go func() {
 		port := defaultMetricsPort
@@ -75,7 +70,7 @@ func run(ctx context.Context) error {
 		watcher.WithKubernetesClientConfigPath(*kubeconfigPath),
 		watcher.WithExecutor(executor),
 		watcher.WithCheckers(checkers),
-		watcher.WithMonitorOnly(monitorOnlyFlag),
+		watcher.WithMonitorOnly(monitorOnly),
 		watcher.WithRebootWaitMinutes(rebootWaitMinutes),
 		watcher.WithGPURebootWaitMinutes(gpuRebootWaitMinutes),
 	)

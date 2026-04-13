@@ -249,7 +249,7 @@ func TestRun_RebootTriggerActiveMode(t *testing.T) {
 		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
 		WithCheckers(health.NewDefaultCheckers()),
 		WithExecutor(exec),
-		WithMonitorOnly(false),
+		WithMonitorOnly("false"),
 		WithNowFunc(func() time.Time { return now }),
 	)
 
@@ -286,7 +286,7 @@ func TestRun_RebootSkippedInReportMode(t *testing.T) {
 		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
 		WithCheckers(health.NewDefaultCheckers()),
 		WithExecutor(exec),
-		WithMonitorOnly(true),
+		WithMonitorOnly("true"),
 		WithNowFunc(func() time.Time { return now }),
 	)
 
@@ -318,7 +318,7 @@ func TestRun_RecoveryAfterReboot(t *testing.T) {
 	w := newTestWatcher(t,
 		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
 		WithCheckers(health.NewDefaultCheckers()),
-		WithMonitorOnly(false),
+		WithMonitorOnly("false"),
 		WithNowFunc(func() time.Time { return now }),
 	)
 
@@ -358,7 +358,7 @@ func TestRun_RebootRetry(t *testing.T) {
 		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
 		WithCheckers(health.NewDefaultCheckers()),
 		WithExecutor(exec),
-		WithMonitorOnly(false),
+		WithMonitorOnly("false"),
 		WithGPURebootWaitMinutes("40"),
 		WithNowFunc(func() time.Time { return now }),
 	)
@@ -436,7 +436,7 @@ func TestRun_RebootErrorContinuesProcessing(t *testing.T) {
 		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
 		WithCheckers(health.NewDefaultCheckers()),
 		WithExecutor(exec),
-		WithMonitorOnly(false),
+		WithMonitorOnly("false"),
 		WithNowFunc(func() time.Time { return now }),
 	)
 
@@ -505,7 +505,7 @@ func TestRun_UnhealthyWithinThresholdNoReboot(t *testing.T) {
 		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
 		WithCheckers(health.NewDefaultCheckers()),
 		WithExecutor(exec),
-		WithMonitorOnly(false),
+		WithMonitorOnly("false"),
 		WithNowFunc(func() time.Time { return now }),
 	)
 

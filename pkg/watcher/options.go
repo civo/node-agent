@@ -77,10 +77,13 @@ func WithGPURebootWaitMinutes(s string) Option {
 }
 
 // WithMonitorOnly returns Option to enable or disable monitor-only mode.
-// When true (default), recovery actions are logged but not executed.
-func WithMonitorOnly(v bool) Option {
+// Accepts a string parsable by strconv.ParseBool (e.g. "true", "false", "1", "0").
+// Empty or unparsable values are ignored (default: true).
+func WithMonitorOnly(s string) Option {
 	return func(w *watcher) {
-		w.monitorOnly = v
+		if v, err := strconv.ParseBool(s); err == nil {
+			w.monitorOnly = v
+		}
 	}
 }
 
