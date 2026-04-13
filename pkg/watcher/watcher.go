@@ -4,20 +4,21 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strconv"
-	"sync"
 	"time"
 
-	"github.com/civo/civogo"
+	"github.com/civo/node-agent/pkg/health"
+	"github.com/civo/node-agent/pkg/metrics"
+	"github.com/civo/node-agent/pkg/operation"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	listerscorev1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 )
-
-// Version is the current version of the this watcher
-var Version string = "0.0.1"
 
 const (
 	nodePoolLabelKey = "kubernetes.civo.com/civo-node-pool"
@@ -30,28 +31,29 @@ type Watcher interface {
 
 type watcher struct {
 	client        kubernetes.Interface
-	civoClient    civogo.Clienter
 	clientCfgPath string
 
 	clusterID               string
-	region                  string
-	apiKey                  string
-	apiURL                  string
 	nodeDesiredGPUCount     int
 	rebootTimeWindowMinutes time.Duration
 
-	// NOTE: This is only effective when running with a single node-agent. If we want to run multiple instances, additional logic modifications will be required.
-	lastRebootCmdTimes sync.Map
-
 	nodeSelector *metav1.LabelSelector
+	nodeLister   listerscorev1.NodeLister
+
+	monitorOnly        bool
+	unhealthyThreshold time.Duration
+	checkers           []health.HealthChecker
+	executor           operation.Executor
+	states             *StateStore
+	nowFunc            func() time.Time
 }
 
-func NewWatcher(ctx context.Context, apiURL, apiKey, region, clusterID, nodePoolID string, opts ...Option) (Watcher, error) {
+func NewWatcher(ctx context.Context, clusterID, nodePoolID string, opts ...Option) (Watcher, error) {
 	w := &watcher{
-		clusterID: clusterID,
-		apiKey:    apiKey,
-		apiURL:    apiURL,
-		region:    region,
+		clusterID:   clusterID,
+		monitorOnly: true,
+		states:      NewStateStore(),
+		nowFunc:     time.Now,
 	}
 	for _, opt := range append(defaultOptions, opts...) {
 		opt(w)
@@ -63,9 +65,6 @@ func NewWatcher(ctx context.Context, apiURL, apiKey, region, clusterID, nodePool
 	if nodePoolID == "" {
 		return nil, fmt.Errorf("CIVO_NODE_POOL_ID not set")
 	}
-	if w.civoClient == nil && apiKey == "" {
-		return nil, fmt.Errorf("CIVO_API_KEY not set")
-	}
 
 	w.nodeSelector = &metav1.LabelSelector{
 		MatchLabels: map[string]string{
@@ -76,15 +75,12 @@ func NewWatcher(ctx context.Context, apiURL, apiKey, region, clusterID, nodePool
 	if err := w.setupKubernetesClient(); err != nil {
 		return nil, err
 	}
-	if err := w.setupCivoClient(); err != nil {
-		return nil, err
-	}
 	return w, nil
 }
 
 // setupKubernetesClient creates Kubernetes client based on the kubeconfig path.
 // If kubeconfig path is not empty, the client will be created using that path.
-// Otherwise, if the kubeconfig path is empty, the client will be created using the in-clustetr config.
+// Otherwise, if the kubeconfig path is empty, the client will be created using the in-cluster config.
 func (w *watcher) setupKubernetesClient() (err error) {
 	if w.clientCfgPath != "" && w.client == nil {
 		cfg, err := clientcmd.BuildConfigFromFlags("", w.clientCfgPath)
@@ -111,28 +107,38 @@ func (w *watcher) setupKubernetesClient() (err error) {
 	return nil
 }
 
-func (w *watcher) setupCivoClient() error {
-	if w.civoClient != nil {
+func (w *watcher) setupInformer(ctx context.Context) error {
+	if w.nodeLister != nil {
 		return nil
 	}
 
-	client, err := civogo.NewClientWithURL(w.apiKey, w.apiURL, w.region)
-	if err != nil {
-		return fmt.Errorf("failed to initialise civo client: %w", err)
+	labelSelector := metav1.FormatLabelSelector(w.nodeSelector)
+	factory := informers.NewSharedInformerFactoryWithOptions(
+		w.client,
+		0,
+		informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
+			opts.LabelSelector = labelSelector
+		}),
+	)
+
+	nodeInformer := factory.Core().V1().Nodes()
+	w.nodeLister = nodeInformer.Lister()
+
+	factory.Start(ctx.Done())
+
+	if !cache.WaitForCacheSync(ctx.Done(), nodeInformer.Informer().HasSynced) {
+		return fmt.Errorf("failed to sync node informer cache")
 	}
 
-	userAgent := &civogo.Component{
-		ID:      w.clusterID,
-		Name:    "node-agent",
-		Version: Version,
-	}
-	client.SetUserAgent(userAgent)
-
-	w.civoClient = client
+	slog.Info("Node informer cache synced")
 	return nil
 }
 
 func (w *watcher) Run(ctx context.Context) error {
+	if err := w.setupInformer(ctx); err != nil {
+		return err
+	}
+
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -150,139 +156,122 @@ func (w *watcher) Run(ctx context.Context) error {
 }
 
 func (w *watcher) run(ctx context.Context) error {
-	nodes, err := w.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{
-		LabelSelector: metav1.FormatLabelSelector(w.nodeSelector),
-	})
+	nodes, err := w.nodeLister.List(labels.Everything())
 	if err != nil {
 		return err
 	}
 
-	thresholdTime := time.Now().Add(-w.rebootTimeWindowMinutes * time.Minute)
+	now := w.nowFunc()
+	activeNodes := make(map[string]struct{}, len(nodes))
 
-	for _, node := range nodes.Items {
-		if !isNodeDesiredGPU(&node, w.nodeDesiredGPUCount) || !isNodeReady(&node) {
+	for _, node := range nodes {
+		nodeName := node.GetName()
+		activeNodes[nodeName] = struct{}{}
 
-			// LTT:  LastTransitionTime of node.
-			// LRCT: LastRebootCmdTimes
-			// 60:   Threshold time (example)
-			// - LTT > 60 , LRCT < 60 dont reboot
-			// - LTT < 60 , LRCT < 60 dont reboot
-			// - LTT < 60 , LRCT > 60 dont reboot
-			// - LTT > 60, LRCT >. 60 reboot
-			slog.Info("Node is not ready, attempting to reboot", "node", node.GetName())
-			if isReadyOrNotReadyStatusChangedAfter(&node, thresholdTime) {
-				slog.Info("Skipping reboot because Ready/NotReady status was updated recently", "node", node.GetName())
+		// Run all health checkers and collect failures.
+		var failedCheckers []string
+		for _, checker := range w.checkers {
+			healthy := checker.Check(node)
+			result := "pass"
+			if !healthy {
+				result = "fail"
+				failedCheckers = append(failedCheckers, checker.Name())
+			}
+			metrics.HealthCheckTotal.WithLabelValues(nodeName, checker.Name(), result).Inc()
+		}
+
+		state := w.states.GetOrCreate(nodeName)
+
+		// All checkers pass → node is healthy.
+		if len(failedCheckers) == 0 {
+			if state.Phase() != PhaseHealthy {
+				prevPhase := state.Phase()
+				slog.Info("Node recovered",
+					"node", nodeName,
+					"previousPhase", prevPhase.String())
+				metrics.NodeUnhealthyDurationSeconds.WithLabelValues(nodeName).Set(0)
+				metrics.RecoveryPhase.WithLabelValues(nodeName, prevPhase.String()).Set(0)
+				metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseHealthy.String()).Set(1)
+				w.states.Reset(nodeName)
+			}
+			continue
+		}
+
+		// At least one checker failed.
+		isGPU := hasGPU(node)
+		w.states.UpdateCheckerInfo(nodeName, failedCheckers, isGPU)
+
+		switch state.Phase() {
+		case PhaseHealthy:
+			w.states.MarkUnhealthy(nodeName, now)
+			slog.Info("Node unhealthy detected",
+				"node", nodeName,
+				"failedCheckers", failedCheckers)
+			metrics.NodeUnhealthyDurationSeconds.WithLabelValues(nodeName).Set(0)
+			metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseHealthy.String()).Set(0)
+			metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseUnhealthy.String()).Set(1)
+
+		case PhaseUnhealthy:
+			metrics.NodeUnhealthyDurationSeconds.WithLabelValues(nodeName).Set(
+				now.Sub(state.UnhealthySince()).Seconds())
+			if now.Sub(state.UnhealthySince()) < w.unhealthyThreshold {
 				continue
 			}
-			if w.isLastRebootCommandTimeAfter(node.GetName(), thresholdTime) {
-				slog.Info("Skipping reboot because Reboot command was executed recently", "node", node.GetName())
+			if !w.monitorOnly {
+				if err := w.executor.Reboot(ctx, nodeName); err != nil {
+					slog.Error("Failed to reboot node", "node", nodeName, "error", err)
+					continue
+				}
+			}
+			mode := modeLabel(w.monitorOnly)
+			slog.Info("Reboot initiated",
+				"node", nodeName,
+				"mode", mode,
+				"failedCheckers", failedCheckers)
+			metrics.RecoveryActionsTotal.WithLabelValues(nodeName, "reboot", mode).Inc()
+			metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseUnhealthy.String()).Set(0)
+			metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseWaitingReboot.String()).Set(1)
+			w.states.MarkWaitingReboot(nodeName, now)
+
+		case PhaseWaitingReboot:
+			metrics.NodeUnhealthyDurationSeconds.WithLabelValues(nodeName).Set(
+				now.Sub(state.UnhealthySince()).Seconds())
+			if now.Sub(state.LastRebootTime()) < w.rebootTimeWindowMinutes*time.Minute {
 				continue
 			}
-			if err := w.rebootNode(node.GetName()); err != nil {
-				slog.Error("Failed to reboot Node", "node", node.GetName(), "error", err)
-				return fmt.Errorf("failed to reboot node: %w", err)
+			if !w.monitorOnly {
+				if err := w.executor.Reboot(ctx, nodeName); err != nil {
+					slog.Error("Failed to reboot node (retry)", "node", nodeName, "error", err)
+					continue
+				}
 			}
+			mode := modeLabel(w.monitorOnly)
+			slog.Info("Reboot retry",
+				"node", nodeName,
+				"mode", mode,
+				"rebootCount", state.RebootCount()+1,
+				"failedCheckers", failedCheckers)
+			metrics.RecoveryActionsTotal.WithLabelValues(nodeName, "reboot", mode).Inc()
+			w.states.MarkWaitingReboot(nodeName, now)
 		}
 	}
+
+	w.states.Cleanup(activeNodes)
 	return nil
 }
 
-func isReadyOrNotReadyStatusChangedAfter(node *corev1.Node, thresholdTime time.Time) bool {
-	var lastChangedTime time.Time
-	for _, cond := range node.Status.Conditions {
-		if cond.Type == corev1.NodeReady {
-			if cond.LastTransitionTime.After(lastChangedTime) {
-				lastChangedTime = cond.LastTransitionTime.Time
-			}
-		}
+func modeLabel(monitorOnly bool) string {
+	if monitorOnly {
+		return "monitor"
 	}
-
-	slog.Info("Checking if Ready/NotReady status has changed recently",
-		"node", node.GetName(),
-		"lastTransitionTime", lastChangedTime.String(),
-		"thresholdTime", thresholdTime.String())
-
-	if lastChangedTime.IsZero() {
-		slog.Error("Node is in an invalid state, NodeReady condition not found", "node", node.GetName())
-		return false
-	}
-	return lastChangedTime.After(thresholdTime)
+	return "active"
 }
 
-// isLastRebootCommandTimeAfter checks if the last reboot command time for the specified node
-// is after the given threshold time. In case of delays in reboot, the
-// LastTransitionTime of node might not be updated, so it compares the latest reboot
-// command time to prevent sending reboot commands multiple times.
-// NOTE: This is only effective when running with a single node-agent. If we want to run multiple instances, additional logic modifications will be required.
-func (w *watcher) isLastRebootCommandTimeAfter(nodeName string, thresholdTime time.Time) bool {
-	v, ok := w.lastRebootCmdTimes.Load(nodeName)
-	if !ok {
-		slog.Info("LastRebootCommandTime not found", "node", nodeName)
-		return false
-	}
-	lastRebootCmdTime, ok := v.(time.Time)
-	if !ok {
-		slog.Info("LastRebootCommandTime is invalid, so it will be removed from the records", "node", nodeName, "value", v)
-		w.lastRebootCmdTimes.Delete(nodeName)
-		return false
-	}
-
-	slog.Info("Checking if LastRebootCommandTime has changed recently",
-		"node", nodeName,
-		"lastRebootCommandTime", lastRebootCmdTime.String(),
-		"thresholdTime", thresholdTime.String())
-
-	return lastRebootCmdTime.After(thresholdTime)
-}
-
-func isNodeReady(node *corev1.Node) bool {
-	for _, cond := range node.Status.Conditions {
-		if cond.Type == corev1.NodeReady {
-			slog.Info("Current Node status", "node", node.GetName(), "type", corev1.NodeReady, "status", cond.Status)
-			return cond.Status == corev1.ConditionTrue
-		}
-	}
-	slog.Info("NodeReady condition not found", "node", node.GetName())
-	return false
-}
-
-func isNodeDesiredGPU(node *corev1.Node, desired int) bool {
-	if desired == 0 {
-		slog.Info("Desired GPU count is set to 0, so the GPU count check is skipped", "node", node.GetName())
-		return true
-	}
-
+func hasGPU(node *corev1.Node) bool {
 	quantity, exists := node.Status.Allocatable[gpuResourceName]
-	if !exists || quantity.IsZero() {
-		slog.Info("Allocatable GPU not found", "node", node.GetName())
+	if !exists {
 		return false
 	}
-
 	gpuCount, ok := quantity.AsInt64()
-	if !ok {
-		slog.Info("Failed to convert allocatable GPU quantity to int64", "node", node.GetName(), "quantity", quantity.String())
-		return false
-	}
-
-	slog.Info("Checking actual GPU count with desired",
-		"node", node.GetName(),
-		"actual", gpuCount,
-		"desired", strconv.Itoa(desired))
-
-	return gpuCount == int64(desired)
-}
-
-func (w *watcher) rebootNode(name string) error {
-	instance, err := w.civoClient.FindKubernetesClusterInstance(w.clusterID, name)
-	if err != nil {
-		return fmt.Errorf("failed to find instance, clusterID: %s, nodeName: %s: %w", w.clusterID, name, err)
-	}
-
-	_, err = w.civoClient.HardRebootInstance(instance.ID)
-	if err != nil {
-		return fmt.Errorf("failed to reboot instance, clusterID: %s, instanceID: %s: %w", w.clusterID, instance.ID, err)
-	}
-	slog.Info("Instance is rebooting", "instanceID", instance.ID, "node", name)
-	w.lastRebootCmdTimes.Store(name, time.Now())
-	return nil
+	return ok && gpuCount > 0
 }

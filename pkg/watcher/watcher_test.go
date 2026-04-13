@@ -1,37 +1,117 @@
 package watcher
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/civo/civogo"
+	"github.com/civo/node-agent/pkg/health"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/fake"
-	k8stesting "k8s.io/client-go/testing"
 )
+
+// --- Test helpers ---
+
+// fakeNodeLister implements listerscorev1.NodeLister for testing.
+type fakeNodeLister struct {
+	nodes []*corev1.Node
+	err   error
+}
+
+func (l *fakeNodeLister) List(selector labels.Selector) ([]*corev1.Node, error) {
+	if l.err != nil {
+		return nil, l.err
+	}
+	return l.nodes, nil
+}
+
+func (l *fakeNodeLister) Get(name string) (*corev1.Node, error) {
+	for _, n := range l.nodes {
+		if n.Name == name {
+			return n, nil
+		}
+	}
+	return nil, fmt.Errorf("node %q not found", name)
+}
+
+// mockExecutor implements operation.Executor for testing.
+type mockExecutor struct {
+	rebootFunc func(ctx context.Context, nodeName string) error
+	calls      []string
+}
+
+func (m *mockExecutor) Reboot(ctx context.Context, nodeName string) error {
+	m.calls = append(m.calls, nodeName)
+	if m.rebootFunc != nil {
+		return m.rebootFunc(ctx, nodeName)
+	}
+	return nil
+}
+
+// alwaysFailChecker is a HealthChecker that always reports unhealthy.
+type alwaysFailChecker struct{ name string }
+
+func (c *alwaysFailChecker) Name() string            { return c.name }
+func (c *alwaysFailChecker) Check(*corev1.Node) bool { return false }
+
+// --- Test variables ---
 
 var (
 	testClusterID               = "test-cluster-123"
-	testRegion                  = "lon1"
-	testApiKey                  = "test-api-key"
-	testApiURL                  = "https://test.civo.com"
 	testNodePoolID              = "test-node-pool"
 	testNodeDesiredGPUCount     = "8"
 	testRebootTimeWindowMinutes = time.Duration(40)
 )
 
+// newTestNode creates a node for testing with common defaults.
+func newTestNode(name string, ready corev1.ConditionStatus, gpuCount int) *corev1.Node {
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				nodePoolLabelKey: testNodePoolID,
+			},
+		},
+		Status: corev1.NodeStatus{
+			Conditions: []corev1.NodeCondition{
+				{Type: corev1.NodeReady, Status: ready},
+			},
+		},
+	}
+	if gpuCount > 0 {
+		node.Status.Allocatable = corev1.ResourceList{
+			gpuResourceName: resource.MustParse(strconv.Itoa(gpuCount)),
+		}
+	}
+	return node
+}
+
+// newTestWatcher creates a watcher with sensible test defaults and the given options.
+func newTestWatcher(t *testing.T, opts ...Option) *watcher {
+	t.Helper()
+	baseOpts := []Option{
+		WithKubernetesClient(fake.NewSimpleClientset()),
+		WithExecutor(&mockExecutor{}),
+	}
+	w, err := NewWatcher(t.Context(),
+		testClusterID, testNodePoolID,
+		append(baseOpts, opts...)...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return w.(*watcher)
+}
+
+// --- TestNew ---
+
 func TestNew(t *testing.T) {
 	type args struct {
 		clusterID  string
-		region     string
-		apiKey     string
-		apiURL     string
 		nodePoolID string
 		opts       []Option
 	}
@@ -47,13 +127,10 @@ func TestNew(t *testing.T) {
 			name: "Returns no error when given valid input",
 			args: args{
 				clusterID:  testClusterID,
-				region:     testRegion,
-				apiKey:     testApiKey,
-				apiURL:     testApiURL,
 				nodePoolID: testNodePoolID,
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
-					WithCivoClient(&FakeClient{}),
+					WithExecutor(&mockExecutor{}),
 					WithDesiredGPUCount(testNodeDesiredGPUCount),
 				},
 			},
@@ -61,22 +138,12 @@ func TestNew(t *testing.T) {
 				if w.clusterID != testClusterID {
 					return fmt.Errorf("clusterID mismatch: got %s, want %s", w.clusterID, testClusterID)
 				}
-				if w.region != testRegion {
-					return fmt.Errorf("region mismatch: got %s, want %s", w.region, testRegion)
-				}
-				if w.apiKey != testApiKey {
-					return fmt.Errorf("apiKey mismatch: got %s, want %s", w.apiKey, testApiKey)
-				}
-				if w.apiURL != testApiURL {
-					return fmt.Errorf("apiURL mismatch: got %s, want %s", w.apiURL, testApiURL)
-				}
-
 				cnt, err := strconv.Atoi(testNodeDesiredGPUCount)
 				if err != nil {
 					return err
 				}
 				if w.nodeDesiredGPUCount != cnt {
-					return fmt.Errorf("nodeDesiredGPUCount mismatch: got %d, want %s", w.nodeDesiredGPUCount, testNodeDesiredGPUCount)
+					return fmt.Errorf("nodeDesiredGPUCount mismatch: got %d, want %d", w.nodeDesiredGPUCount, cnt)
 				}
 				if w.nodeSelector == nil || w.nodeSelector.MatchLabels[nodePoolLabelKey] != testNodePoolID {
 					return fmt.Errorf("nodeSelector mismatch: got %v, want %s", w.nodeSelector, testNodePoolID)
@@ -84,11 +151,17 @@ func TestNew(t *testing.T) {
 				if w.client == nil {
 					return fmt.Errorf("client is nil")
 				}
-				if w.civoClient == nil {
-					return fmt.Errorf("civoClient is nil")
-				}
 				if w.rebootTimeWindowMinutes != testRebootTimeWindowMinutes {
-					return fmt.Errorf("w.rebootTimeWindowMinutes mismatch: got %v, want %s", w.nodeSelector, testNodePoolID)
+					return fmt.Errorf("rebootTimeWindowMinutes mismatch: got %v, want %v", w.rebootTimeWindowMinutes, testRebootTimeWindowMinutes)
+				}
+				if !w.monitorOnly {
+					return fmt.Errorf("monitorOnly should default to true")
+				}
+				if w.states == nil {
+					return fmt.Errorf("states is nil")
+				}
+				if w.nowFunc == nil {
+					return fmt.Errorf("nowFunc is nil")
 				}
 				return nil
 			},
@@ -97,46 +170,22 @@ func TestNew(t *testing.T) {
 			name: "Returns no error when input is invalid, but default value is set",
 			args: args{
 				clusterID:  testClusterID,
-				region:     testRegion,
-				apiKey:     testApiKey,
-				apiURL:     testApiURL,
 				nodePoolID: testNodePoolID,
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
-					WithCivoClient(&FakeClient{}),
-					WithDesiredGPUCount("invalid"),              // It is invalid, but the default count (0) will be used.
-					WithDesiredGPUCount("-1"),                   // It is invalid, but the default count (0) will be used.
-					WithRebootTimeWindowMinutes("invalid time"), // It is invalid, but the default time (40) will be used.
-					WithRebootTimeWindowMinutes("0"),            // It is invalid, but the default time (40) will be used.
+					WithExecutor(&mockExecutor{}),
+					WithDesiredGPUCount("invalid"),
+					WithDesiredGPUCount("-1"),
+					WithRebootTimeWindowMinutes("invalid time"),
+					WithRebootTimeWindowMinutes("0"),
 				},
 			},
 			checkFunc: func(w *watcher) error {
 				if w.nodeDesiredGPUCount != 0 {
-					return fmt.Errorf("w.nodeDesiredGPUCount mismatch: got %d, want %d", w.nodeDesiredGPUCount, 0)
+					return fmt.Errorf("nodeDesiredGPUCount mismatch: got %d, want %d", w.nodeDesiredGPUCount, 0)
 				}
 				if w.rebootTimeWindowMinutes != testRebootTimeWindowMinutes {
-					return fmt.Errorf("w.rebootTimeWindowMinutes mismatch: got %v, want %s", w.nodeSelector, testNodePoolID)
-				}
-				return nil
-			},
-		},
-		{
-			name: "Returns no error when nodeDesiredGPUCount is 0",
-			args: args{
-				clusterID:  testClusterID,
-				region:     testRegion,
-				apiKey:     testApiKey,
-				apiURL:     testApiURL,
-				nodePoolID: testNodePoolID,
-				opts: []Option{
-					WithKubernetesClient(fake.NewSimpleClientset()),
-					WithCivoClient(&FakeClient{}),
-					WithDesiredGPUCount("0"),
-				},
-			},
-			checkFunc: func(w *watcher) error {
-				if w.nodeDesiredGPUCount != 0 {
-					return fmt.Errorf("w.nodeDesiredGPUCount mismatch: got %d, want %d", w.nodeDesiredGPUCount, 0)
+					return fmt.Errorf("rebootTimeWindowMinutes mismatch: got %v, want %v", w.rebootTimeWindowMinutes, testRebootTimeWindowMinutes)
 				}
 				return nil
 			},
@@ -144,13 +193,21 @@ func TestNew(t *testing.T) {
 		{
 			name: "Returns an error when clusterID is missing",
 			args: args{
-				region:     testRegion,
-				apiKey:     testApiKey,
-				apiURL:     testApiURL,
 				nodePoolID: testNodePoolID,
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
-					WithCivoClient(&FakeClient{}),
+					WithExecutor(&mockExecutor{}),
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "Returns an error when nodePoolID is missing",
+			args: args{
+				clusterID: testClusterID,
+				opts: []Option{
+					WithKubernetesClient(fake.NewSimpleClientset()),
+					WithExecutor(&mockExecutor{}),
 				},
 			},
 			wantErr: true,
@@ -160,9 +217,6 @@ func TestNew(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			w, err := NewWatcher(t.Context(),
-				test.args.apiURL,
-				test.args.apiKey,
-				test.args.region,
 				test.args.clusterID,
 				test.args.nodePoolID,
 				test.args.opts...)
@@ -186,804 +240,338 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func TestRun(t *testing.T) {
-	type args struct {
-		opts       []Option
-		nodePoolID string
-	}
-	type test struct {
-		name       string
-		args       args
-		beforeFunc func(*watcher)
-		wantErr    bool
-	}
+// --- State machine transition tests ---
 
-	tests := []test{
-		{
-			name: "Returns nil when node GPU count is 8 and no reboot needed",
-			args: args{
-				opts: []Option{
-					WithKubernetesClient(fake.NewSimpleClientset()),
-					WithCivoClient(&FakeClient{}),
-					WithDesiredGPUCount(testNodeDesiredGPUCount),
-				},
-				nodePoolID: testNodePoolID,
-			},
-			beforeFunc: func(w *watcher) {
-				t.Helper()
-				client := w.client.(*fake.Clientset)
+func TestRun_HealthyNodeStaysHealthy(t *testing.T) {
+	node := newTestNode("node-01", corev1.ConditionTrue, 8)
+	w := newTestWatcher(t,
+		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		WithCheckers(health.NewDefaultCheckers(8)),
+	)
 
-				nodes := &corev1.NodeList{
-					Items: []corev1.Node{
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "node-01",
-								Labels: map[string]string{
-									nodePoolLabelKey: testNodePoolID,
-								},
-							},
-							Status: corev1.NodeStatus{
-								Conditions: []corev1.NodeCondition{
-									{
-										Type:   corev1.NodeReady,
-										Status: corev1.ConditionTrue,
-									},
-									{
-										Type:   corev1.NodeReady,
-										Status: corev1.ConditionFalse,
-									},
-								},
-								Allocatable: corev1.ResourceList{
-									gpuResourceName: resource.MustParse("8"),
-								},
-							},
-						},
-					},
-				}
-				client.Fake.PrependReactor("list", "nodes", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nodes, nil
-				})
-			},
-		},
-		{
-			name: "Returns nil and triggers reboot when GPU count drops below desired (7 GPUs available)",
-			args: args{
-				opts: []Option{
-					WithKubernetesClient(fake.NewSimpleClientset()),
-					WithCivoClient(&FakeClient{}),
-					WithDesiredGPUCount(testNodeDesiredGPUCount),
-				},
-				nodePoolID: testNodePoolID,
-			},
-			beforeFunc: func(w *watcher) {
-				t.Helper()
-				client := w.client.(*fake.Clientset)
-
-				nodes := &corev1.NodeList{
-					Items: []corev1.Node{
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "node-01",
-								Labels: map[string]string{
-									nodePoolLabelKey: testNodePoolID,
-								},
-							},
-							Status: corev1.NodeStatus{
-								Conditions: []corev1.NodeCondition{
-									{
-										Type:   corev1.NodeReady,
-										Status: corev1.ConditionTrue,
-									},
-									{
-										Type:   corev1.NodeReady,
-										Status: corev1.ConditionFalse,
-									},
-								},
-								Allocatable: corev1.ResourceList{
-									gpuResourceName: resource.MustParse("7"),
-								},
-							},
-						},
-					},
-				}
-				client.Fake.PrependReactor("list", "nodes", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nodes, nil
-				})
-
-				civoClient := w.civoClient.(*FakeClient)
-				instance := &civogo.Instance{
-					ID: "instance-01",
-				}
-				civoClient.FindKubernetesClusterInstanceFunc = func(clusterID, search string) (*civogo.Instance, error) {
-					return instance, nil
-				}
-				civoClient.HardRebootInstanceFunc = func(id string) (*civogo.SimpleResponse, error) {
-					return new(civogo.SimpleResponse), nil
-				}
-			},
-		},
-		{
-			name: "Returns nil and triggers reboot when GPU count matches desired but node is not ready",
-			args: args{
-				opts: []Option{
-					WithKubernetesClient(fake.NewSimpleClientset()),
-					WithCivoClient(&FakeClient{}),
-					WithDesiredGPUCount(testNodeDesiredGPUCount),
-				},
-				nodePoolID: testNodePoolID,
-			},
-			beforeFunc: func(w *watcher) {
-				t.Helper()
-				client := w.client.(*fake.Clientset)
-
-				nodes := &corev1.NodeList{
-					Items: []corev1.Node{
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "node-01",
-								Labels: map[string]string{
-									nodePoolLabelKey: testNodePoolID,
-								},
-							},
-							Status: corev1.NodeStatus{
-								Conditions: []corev1.NodeCondition{
-									{
-										Type:   corev1.NodeReady,
-										Status: corev1.ConditionFalse,
-									},
-								},
-								Allocatable: corev1.ResourceList{
-									gpuResourceName: resource.MustParse("8"),
-								},
-							},
-						},
-					},
-				}
-				client.Fake.PrependReactor("list", "nodes", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nodes, nil
-				})
-
-				civoClient := w.civoClient.(*FakeClient)
-				instance := &civogo.Instance{
-					ID: "instance-01",
-				}
-				civoClient.FindKubernetesClusterInstanceFunc = func(clusterID, search string) (*civogo.Instance, error) {
-					return instance, nil
-				}
-				civoClient.HardRebootInstanceFunc = func(id string) (*civogo.SimpleResponse, error) {
-					return new(civogo.SimpleResponse), nil
-				}
-			},
-		},
-		{
-			name: "Returns nil and skips reboot when GPU count matches desired but node is not ready, and LastTransitionTime is more recent than thresholdTime",
-			args: args{
-				opts: []Option{
-					WithKubernetesClient(fake.NewSimpleClientset()),
-					WithCivoClient(&FakeClient{}),
-					WithDesiredGPUCount(testNodeDesiredGPUCount),
-				},
-				nodePoolID: testNodePoolID,
-			},
-			beforeFunc: func(w *watcher) {
-				t.Helper()
-				client := w.client.(*fake.Clientset)
-
-				w.lastRebootCmdTimes.Store("node-01", time.Now())
-
-				nodes := &corev1.NodeList{
-					Items: []corev1.Node{
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "node-01",
-								Labels: map[string]string{
-									nodePoolLabelKey: testNodePoolID,
-								},
-							},
-							Status: corev1.NodeStatus{
-								Conditions: []corev1.NodeCondition{
-									{
-										Type:   corev1.NodeReady,
-										Status: corev1.ConditionFalse,
-									},
-								},
-								Allocatable: corev1.ResourceList{
-									gpuResourceName: resource.MustParse("8"),
-								},
-							},
-						},
-					},
-				}
-				client.Fake.PrependReactor("list", "nodes", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nodes, nil
-				})
-			},
-		},
-		{
-			name: "Returns nil and skips reboot when GPU count matches desired but node is not ready, and LastRebootCmdTime is more recent than thresholdTime",
-			args: args{
-				opts: []Option{
-					WithKubernetesClient(fake.NewSimpleClientset()),
-					WithCivoClient(&FakeClient{}),
-					WithDesiredGPUCount(testNodeDesiredGPUCount),
-				},
-				nodePoolID: testNodePoolID,
-			},
-			beforeFunc: func(w *watcher) {
-				t.Helper()
-				client := w.client.(*fake.Clientset)
-
-				nodes := &corev1.NodeList{
-					Items: []corev1.Node{
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "node-01",
-								Labels: map[string]string{
-									nodePoolLabelKey: testNodePoolID,
-								},
-							},
-							Status: corev1.NodeStatus{
-								Conditions: []corev1.NodeCondition{
-									{
-										Type:               corev1.NodeReady,
-										Status:             corev1.ConditionFalse,
-										LastTransitionTime: metav1.NewTime(time.Now()),
-									},
-								},
-								Allocatable: corev1.ResourceList{
-									gpuResourceName: resource.MustParse("8"),
-								},
-							},
-						},
-					},
-				}
-				client.Fake.PrependReactor("list", "nodes", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nodes, nil
-				})
-			},
-		},
-		{
-			name: "Returns an error when unable to list nodes",
-			args: args{
-				opts: []Option{
-					WithKubernetesClient(fake.NewSimpleClientset()),
-					WithCivoClient(&FakeClient{}),
-					WithDesiredGPUCount(testNodeDesiredGPUCount),
-				},
-				nodePoolID: testNodePoolID,
-			},
-			beforeFunc: func(w *watcher) {
-				t.Helper()
-				client := w.client.(*fake.Clientset)
-
-				client.Fake.PrependReactor("list", "nodes", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, &corev1.NodeList{}, errors.New("invalid error")
-				})
-			},
-			wantErr: true,
-		},
-
-		{
-			name: "Returns an error when finding the Kubernetes cluster instance fails during reboot",
-			args: args{
-				opts: []Option{
-					WithKubernetesClient(fake.NewSimpleClientset()),
-					WithCivoClient(&FakeClient{}),
-					WithDesiredGPUCount(testNodeDesiredGPUCount),
-				},
-				nodePoolID: testNodePoolID,
-			},
-			beforeFunc: func(w *watcher) {
-				t.Helper()
-				client := w.client.(*fake.Clientset)
-
-				nodes := &corev1.NodeList{
-					Items: []corev1.Node{
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "node-01",
-								Labels: map[string]string{
-									nodePoolLabelKey: testNodePoolID,
-								},
-							},
-							Status: corev1.NodeStatus{
-								Conditions: []corev1.NodeCondition{
-									{
-										Type:   corev1.NodeReady,
-										Status: corev1.ConditionFalse,
-									},
-								},
-								Allocatable: corev1.ResourceList{
-									gpuResourceName: resource.MustParse("8"),
-								},
-							},
-						},
-					},
-				}
-				client.Fake.PrependReactor("list", "nodes", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nodes, nil
-				})
-
-				civoClient := w.civoClient.(*FakeClient)
-				civoClient.FindKubernetesClusterInstanceFunc = func(clusterID, search string) (*civogo.Instance, error) {
-					return nil, errors.New("invalid error")
-				}
-			},
-			wantErr: true,
-		},
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			w, err := NewWatcher(t.Context(),
-				testApiURL, testApiKey, testRegion, testClusterID, test.args.nodePoolID, test.args.opts...)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			obj := w.(*watcher)
-			if test.beforeFunc != nil {
-				test.beforeFunc(obj)
-			}
-
-			err = obj.run(t.Context())
-			if (err != nil) != test.wantErr {
-				t.Errorf("error = %v, wantErr %v", err, test.wantErr)
-			}
-		})
+	state, ok := w.states.Get("node-01")
+	if !ok {
+		t.Fatal("state should exist for node-01")
+	}
+	if state.Phase() != PhaseHealthy {
+		t.Errorf("got phase %v, want PhaseHealthy", state.Phase())
 	}
 }
 
-func TestIsReadyOrNotReadyStatusChangedAfter(t *testing.T) {
-	type test struct {
-		name          string
-		node          *corev1.Node
-		thresholdTime time.Time
-		want          bool
+func TestRun_UnhealthyDetection(t *testing.T) {
+	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
+	node := newTestNode("node-01", corev1.ConditionFalse, 8)
+	w := newTestWatcher(t,
+		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		WithCheckers(health.NewDefaultCheckers(8)),
+		WithNowFunc(func() time.Time { return now }),
+	)
+
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
 	}
 
-	tests := []test{
-		{
-			name: "Returns true when NodeReady condition is true (Ready) and last transition time is after threshold",
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "node-01",
-				},
-				Status: corev1.NodeStatus{
-					Conditions: []corev1.NodeCondition{
-						{
-							Type:               corev1.NodeReady,
-							Status:             corev1.ConditionTrue,
-							LastTransitionTime: metav1.NewTime(time.Now()),
-						},
-					},
-				},
-			},
-			thresholdTime: time.Now().Add(-time.Hour),
-			want:          true,
-		},
-		{
-			name: "Returns true when NodeReady condition is false (NotReady) and last transition time is after threshold",
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "node-01",
-				},
-				Status: corev1.NodeStatus{
-					Conditions: []corev1.NodeCondition{
-						{
-							Type:               corev1.NodeReady,
-							Status:             corev1.ConditionFalse,
-							LastTransitionTime: metav1.NewTime(time.Now()),
-						},
-					},
-				},
-			},
-			thresholdTime: time.Now().Add(-time.Hour),
-			want:          true,
-		},
-		{
-			name: "Returns false when the latest NodeReady condition is older than thresholdTime",
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "node-01",
-				},
-				Status: corev1.NodeStatus{
-					Conditions: []corev1.NodeCondition{
-						{
-							Type:               corev1.NodeReady,
-							Status:             corev1.ConditionFalse,
-							LastTransitionTime: metav1.NewTime(time.Now().Add(-time.Hour)),
-						},
-					},
-				},
-			},
-			thresholdTime: time.Now(),
-			want:          false,
-		},
-		{
-			name: "Returns false when no conditions are present on the node",
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "node-01",
-				},
-				Status: corev1.NodeStatus{
-					Conditions: []corev1.NodeCondition{},
-				},
-			},
-			thresholdTime: time.Now().Add(-time.Hour),
-			want:          false,
-		},
-		{
-			name: "Returns false when there is only NodeDiskPressure condition",
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "node-01",
-				},
-				Status: corev1.NodeStatus{
-					Conditions: []corev1.NodeCondition{
-						{
-							Type:              corev1.NodeDiskPressure,
-							Status:            corev1.ConditionFalse,
-							LastHeartbeatTime: metav1.NewTime(time.Now()),
-						},
-					},
-				},
-			},
-			thresholdTime: time.Now().Add(-time.Hour),
-			want:          false,
-		},
+	state, _ := w.states.Get("node-01")
+	if state.Phase() != PhaseUnhealthy {
+		t.Errorf("got phase %v, want PhaseUnhealthy", state.Phase())
 	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			got := isReadyOrNotReadyStatusChangedAfter(test.node, test.thresholdTime)
-			if got != test.want {
-				t.Errorf("got = %v, want %v", got, test.want)
-			}
-		})
+	if !state.UnhealthySince().Equal(now) {
+		t.Errorf("got unhealthySince %v, want %v", state.UnhealthySince(), now)
 	}
 }
 
-func TestIsLastRebootCommandTimeAfter(t *testing.T) {
-	type test struct {
-		name          string
-		nodeName      string
-		opts          []Option
-		thresholdTime time.Time
-		beforeFunc    func(*watcher)
-		want          bool
+func TestRun_RebootTriggerActiveMode(t *testing.T) {
+	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
+	node := newTestNode("node-01", corev1.ConditionFalse, 8)
+	exec := &mockExecutor{}
+	w := newTestWatcher(t,
+		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		WithCheckers(health.NewDefaultCheckers(8)),
+		WithExecutor(exec),
+		WithMonitorOnly(false),
+		WithUnhealthyThresholdMinutes("10"),
+		WithNowFunc(func() time.Time { return now }),
+	)
+
+	// First run: detect unhealthy.
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
 	}
 
-	tests := []test{
-		{
-			name: "Return true when last reboot command time is after threshold",
-			opts: []Option{
-				WithKubernetesClient(fake.NewSimpleClientset()),
-				WithCivoClient(&FakeClient{}),
-			},
-			nodeName:      "node-01",
-			thresholdTime: time.Now().Add(-time.Hour),
-			beforeFunc: func(w *watcher) {
-				w.lastRebootCmdTimes.Store("node-01", time.Now())
-			},
-			want: true,
-		},
-		{
-			name: "Return false when last reboot command time is before threshold",
-			opts: []Option{
-				WithKubernetesClient(fake.NewSimpleClientset()),
-				WithCivoClient(&FakeClient{}),
-			},
-			nodeName:      "node-01",
-			thresholdTime: time.Now().Add(-time.Hour),
-			beforeFunc: func(w *watcher) {
-				w.lastRebootCmdTimes.Store("nodde-01", time.Now().Add(-2*time.Hour))
-			},
-			want: false,
-		},
-		{
-			name: "Return false when last reboot command time not found",
-			opts: []Option{
-				WithKubernetesClient(fake.NewSimpleClientset()),
-				WithCivoClient(&FakeClient{}),
-			},
-			nodeName:      "node-01",
-			thresholdTime: time.Now().Add(-time.Hour),
-			want:          false,
-		},
-		{
-			name: "Return false when type of last reboot command time is invalid",
-			opts: []Option{
-				WithKubernetesClient(fake.NewSimpleClientset()),
-				WithCivoClient(&FakeClient{}),
-			},
-			nodeName:      "node-01",
-			thresholdTime: time.Now().Add(-time.Hour),
-			beforeFunc: func(w *watcher) {
-				w.lastRebootCmdTimes.Store("nodde-01", "invalid-type")
-			},
-			want: false,
-		},
+	// Advance past threshold.
+	now = now.Add(11 * time.Minute)
+
+	// Second run: should trigger reboot.
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			w, err := NewWatcher(t.Context(),
-				testApiURL, testApiKey, testRegion, testClusterID, testNodePoolID, test.opts...)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			obj := w.(*watcher)
-			if test.beforeFunc != nil {
-				test.beforeFunc(obj)
-			}
-			got := obj.isLastRebootCommandTimeAfter(test.nodeName, test.thresholdTime)
-			if got != test.want {
-				t.Errorf("got = %v, want %v", got, test.want)
-			}
-		})
+	state, _ := w.states.Get("node-01")
+	if state.Phase() != PhaseWaitingReboot {
+		t.Errorf("got phase %v, want PhaseWaitingReboot", state.Phase())
+	}
+	if state.RebootCount() != 1 {
+		t.Errorf("got rebootCount %d, want 1", state.RebootCount())
+	}
+	if len(exec.calls) != 1 || exec.calls[0] != "node-01" {
+		t.Errorf("expected 1 reboot call for node-01, got %v", exec.calls)
 	}
 }
 
-func TestIsNodeReady(t *testing.T) {
-	type test struct {
-		name string
-		node *corev1.Node
-		want bool
+func TestRun_RebootSkippedInReportMode(t *testing.T) {
+	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
+	node := newTestNode("node-01", corev1.ConditionFalse, 8)
+	exec := &mockExecutor{}
+	w := newTestWatcher(t,
+		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		WithCheckers(health.NewDefaultCheckers(8)),
+		WithExecutor(exec),
+		WithMonitorOnly(true),
+		WithUnhealthyThresholdMinutes("10"),
+		WithNowFunc(func() time.Time { return now }),
+	)
+
+	// First run: detect unhealthy.
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
 	}
 
-	tests := []test{
-		{
-			name: "Returns true when Node is ready state",
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "node-01",
-				},
-				Status: corev1.NodeStatus{
-					Conditions: []corev1.NodeCondition{
-						{
-							Type:   corev1.NodeReady,
-							Status: corev1.ConditionTrue,
-						},
-						{
-							Type:   corev1.NodeReady,
-							Status: corev1.ConditionFalse,
-						},
-					},
-				},
-			},
-			want: true,
-		},
-		{
-			name: "Returns false when Node is not ready state",
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "node-01",
-				},
-				Status: corev1.NodeStatus{
-					Conditions: []corev1.NodeCondition{
-						{
-							Type:   corev1.NodeReady,
-							Status: corev1.ConditionFalse,
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "Returns false when no conditions for the node",
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "node-01",
-				},
-				Status: corev1.NodeStatus{
-					Conditions: []corev1.NodeCondition{},
-				},
-			},
-		},
+	// Advance past threshold.
+	now = now.Add(11 * time.Minute)
+
+	// Second run: should transition to WaitingReboot but NOT call executor.
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			got := isNodeReady(test.node)
-			if got != test.want {
-				t.Errorf("got = %v, want %v", got, test.want)
-			}
-		})
+	state, _ := w.states.Get("node-01")
+	if state.Phase() != PhaseWaitingReboot {
+		t.Errorf("got phase %v, want PhaseWaitingReboot", state.Phase())
+	}
+	if len(exec.calls) != 0 {
+		t.Errorf("expected no reboot calls in report mode, got %v", exec.calls)
 	}
 }
 
-func TestIsNodeDesiredGPU(t *testing.T) {
-	type test struct {
-		name    string
-		node    *corev1.Node
-		desired int
-		want    bool
+func TestRun_RecoveryAfterReboot(t *testing.T) {
+	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
+	node := newTestNode("node-01", corev1.ConditionFalse, 8)
+	w := newTestWatcher(t,
+		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		WithCheckers(health.NewDefaultCheckers(8)),
+		WithMonitorOnly(false),
+		WithUnhealthyThresholdMinutes("10"),
+		WithNowFunc(func() time.Time { return now }),
+	)
+
+	// Run 1: detect unhealthy.
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	// Run 2: trigger reboot.
+	now = now.Add(11 * time.Minute)
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
 	}
 
-	tests := []test{
-		{
-			name: "Returns true when GPU count matches desired value",
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "node-01",
-				},
-				Status: corev1.NodeStatus{
-					Allocatable: corev1.ResourceList{
-						gpuResourceName: resource.MustParse("8"),
-					},
-				},
-			},
-			desired: 8,
-			want:    true,
-		},
-		{
-			name: "Returns true when desired GPU count is 0, so count check is skipped",
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "node-01",
-				},
-				Status: corev1.NodeStatus{
-					Allocatable: corev1.ResourceList{},
-				},
-			},
-			desired: 0,
-			want:    true,
-		},
-		{
-			name: "Returns false when GPU count is 0",
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "node-01",
-				},
-				Status: corev1.NodeStatus{
-					Allocatable: corev1.ResourceList{
-						gpuResourceName: resource.MustParse("0"),
-					},
-				},
-			},
-			desired: 8,
-			want:    false,
-		},
-		{
-			name: "Returns false when GPU count is less than desired value",
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "node-01",
-				},
-				Status: corev1.NodeStatus{
-					Allocatable: corev1.ResourceList{
-						gpuResourceName: resource.MustParse("7"),
-					},
-				},
-			},
-			desired: 8,
-			want:    false,
-		},
+	// Node recovers.
+	node.Status.Conditions[0].Status = corev1.ConditionTrue
+	now = now.Add(5 * time.Minute)
+
+	// Run 3: should detect recovery.
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			got := isNodeDesiredGPU(test.node, test.desired)
-			if got != test.want {
-				t.Errorf("got = %v, want %v", got, test.want)
-			}
-		})
+	state, _ := w.states.Get("node-01")
+	if state.Phase() != PhaseHealthy {
+		t.Errorf("got phase %v, want PhaseHealthy", state.Phase())
+	}
+	if state.RebootCount() != 0 {
+		t.Errorf("got rebootCount %d, want 0 after recovery", state.RebootCount())
 	}
 }
 
-func TestRebootNode(t *testing.T) {
-	type args struct {
-		nodeName string
-		opts     []Option
+func TestRun_RebootRetry(t *testing.T) {
+	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
+	node := newTestNode("node-01", corev1.ConditionFalse, 8)
+	exec := &mockExecutor{}
+	w := newTestWatcher(t,
+		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		WithCheckers(health.NewDefaultCheckers(8)),
+		WithExecutor(exec),
+		WithMonitorOnly(false),
+		WithUnhealthyThresholdMinutes("10"),
+		WithRebootTimeWindowMinutes("40"),
+		WithNowFunc(func() time.Time { return now }),
+	)
+
+	// Run 1: detect unhealthy.
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
 	}
-	type test struct {
-		name       string
-		args       args
-		beforeFunc func(*testing.T, *watcher)
-		wantErr    bool
-	}
-
-	tests := []test{
-		{
-			name: "Returns nil when there is no error finding and rebooting the instance",
-			args: args{
-				nodeName: "node-01",
-				opts: []Option{
-					WithKubernetesClient(fake.NewSimpleClientset()),
-					WithCivoClient(&FakeClient{}),
-					WithDesiredGPUCount(testNodeDesiredGPUCount),
-				},
-			},
-			beforeFunc: func(t *testing.T, w *watcher) {
-				t.Helper()
-				client := w.civoClient.(*FakeClient)
-
-				instance := &civogo.Instance{
-					ID: "instance-01",
-				}
-
-				client.FindKubernetesClusterInstanceFunc = func(clusterID, search string) (*civogo.Instance, error) {
-					return instance, nil
-				}
-				client.HardRebootInstanceFunc = func(id string) (*civogo.SimpleResponse, error) {
-					if instance.ID != id {
-						t.Errorf("instanceId dose not match. want: %s, but got: %s", instance.ID, id)
-					}
-					return new(civogo.SimpleResponse), nil
-				}
-			},
-		},
-		{
-			name: "Returns an error when instance lookup fails",
-			args: args{
-				nodeName: "node-01",
-				opts: []Option{
-					WithKubernetesClient(fake.NewSimpleClientset()),
-					WithCivoClient(&FakeClient{}),
-					WithDesiredGPUCount(testNodeDesiredGPUCount),
-				},
-			},
-			beforeFunc: func(t *testing.T, w *watcher) {
-				t.Helper()
-				client := w.civoClient.(*FakeClient)
-
-				client.FindKubernetesClusterInstanceFunc = func(clusterID, search string) (*civogo.Instance, error) {
-					return nil, errors.New("invalid error")
-				}
-			},
-			wantErr: true,
-		},
-		{
-			name: "Returns an error when instance reboot fails",
-			args: args{
-				nodeName: "node-01",
-				opts: []Option{
-					WithKubernetesClient(fake.NewSimpleClientset()),
-					WithCivoClient(&FakeClient{}),
-					WithDesiredGPUCount(testNodeDesiredGPUCount),
-				},
-			},
-			beforeFunc: func(t *testing.T, w *watcher) {
-				t.Helper()
-				client := w.civoClient.(*FakeClient)
-
-				instance := &civogo.Instance{
-					ID: "instance-01",
-				}
-
-				client.FindKubernetesClusterInstanceFunc = func(clusterID, search string) (*civogo.Instance, error) {
-					return instance, nil
-				}
-				client.HardRebootInstanceFunc = func(id string) (*civogo.SimpleResponse, error) {
-					if instance.ID != id {
-						t.Errorf("instanceId dose not match. want: %s, but got: %s", instance.ID, id)
-					}
-					return nil, errors.New("invalid error")
-				}
-			},
-			wantErr: true,
-		},
+	// Run 2: trigger first reboot.
+	now = now.Add(11 * time.Minute)
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			w, err := NewWatcher(t.Context(),
-				testApiURL, testApiKey, testRegion, testClusterID, testNodePoolID, test.args.opts...)
-			if err != nil {
-				t.Fatal(err)
-			}
+	// Still unhealthy, but within reboot window → no retry.
+	now = now.Add(30 * time.Minute)
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if len(exec.calls) != 1 {
+		t.Fatalf("expected 1 reboot call before window expires, got %d", len(exec.calls))
+	}
 
-			obj := w.(*watcher)
-			if test.beforeFunc != nil {
-				test.beforeFunc(t, obj)
-			}
+	// Advance past reboot window → retry.
+	now = now.Add(11 * time.Minute)
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 
-			err = obj.rebootNode(test.args.nodeName)
-			if (err != nil) != test.wantErr {
-				t.Errorf("error = %v, wantErr %v", err, test.wantErr)
-			}
-		})
+	state, _ := w.states.Get("node-01")
+	if state.Phase() != PhaseWaitingReboot {
+		t.Errorf("got phase %v, want PhaseWaitingReboot", state.Phase())
+	}
+	if state.RebootCount() != 2 {
+		t.Errorf("got rebootCount %d, want 2", state.RebootCount())
+	}
+	if len(exec.calls) != 2 {
+		t.Errorf("expected 2 reboot calls, got %d", len(exec.calls))
+	}
+}
+
+func TestRun_GPUMismatchTriggersUnhealthy(t *testing.T) {
+	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
+	node := newTestNode("node-01", corev1.ConditionTrue, 7) // 7 GPUs, desired 8
+	w := newTestWatcher(t,
+		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		WithCheckers(health.NewDefaultCheckers(8)),
+		WithNowFunc(func() time.Time { return now }),
+	)
+
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	state, _ := w.states.Get("node-01")
+	if state.Phase() != PhaseUnhealthy {
+		t.Errorf("got phase %v, want PhaseUnhealthy", state.Phase())
+	}
+	if !state.IsGPUNode() {
+		t.Error("expected isGPUNode to be true for node with 7 GPUs")
+	}
+}
+
+func TestRun_RebootErrorContinuesProcessing(t *testing.T) {
+	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
+	node := newTestNode("node-01", corev1.ConditionFalse, 0)
+	exec := &mockExecutor{
+		rebootFunc: func(_ context.Context, _ string) error {
+			return fmt.Errorf("reboot API error")
+		},
+	}
+	w := newTestWatcher(t,
+		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		WithCheckers(health.NewDefaultCheckers(0)),
+		WithExecutor(exec),
+		WithMonitorOnly(false),
+		WithUnhealthyThresholdMinutes("10"),
+		WithNowFunc(func() time.Time { return now }),
+	)
+
+	// Run 1: detect unhealthy.
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	// Run 2: threshold exceeded, reboot fails → should not error out, stays PhaseUnhealthy.
+	now = now.Add(11 * time.Minute)
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal("run should not return error on reboot failure")
+	}
+
+	state, _ := w.states.Get("node-01")
+	if state.Phase() != PhaseUnhealthy {
+		t.Errorf("got phase %v, want PhaseUnhealthy (reboot failed, no transition)", state.Phase())
+	}
+}
+
+func TestRun_NodeListError(t *testing.T) {
+	w := newTestWatcher(t,
+		WithNodeLister(&fakeNodeLister{err: fmt.Errorf("list error")}),
+		WithCheckers(health.NewDefaultCheckers(0)),
+	)
+
+	if err := w.run(t.Context()); err == nil {
+		t.Error("expected error from node list failure")
+	}
+}
+
+func TestRun_StaleStateCleanup(t *testing.T) {
+	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
+	node := newTestNode("node-01", corev1.ConditionFalse, 0)
+	lister := &fakeNodeLister{nodes: []*corev1.Node{node}}
+	w := newTestWatcher(t,
+		WithNodeLister(lister),
+		WithCheckers(health.NewDefaultCheckers(0)),
+		WithNowFunc(func() time.Time { return now }),
+	)
+
+	// Run 1: detect node-01 unhealthy.
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := w.states.Get("node-01"); !ok {
+		t.Fatal("state should exist for node-01")
+	}
+
+	// Node removed from cluster.
+	lister.nodes = nil
+
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := w.states.Get("node-01"); ok {
+		t.Error("state for node-01 should be cleaned up after removal")
+	}
+}
+
+func TestRun_UnhealthyWithinThresholdNoReboot(t *testing.T) {
+	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
+	node := newTestNode("node-01", corev1.ConditionFalse, 0)
+	exec := &mockExecutor{}
+	w := newTestWatcher(t,
+		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		WithCheckers(health.NewDefaultCheckers(0)),
+		WithExecutor(exec),
+		WithMonitorOnly(false),
+		WithUnhealthyThresholdMinutes("10"),
+		WithNowFunc(func() time.Time { return now }),
+	)
+
+	// Run 1: detect unhealthy.
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run 2: still within threshold → no reboot.
+	now = now.Add(5 * time.Minute)
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	state, _ := w.states.Get("node-01")
+	if state.Phase() != PhaseUnhealthy {
+		t.Errorf("got phase %v, want PhaseUnhealthy", state.Phase())
+	}
+	if len(exec.calls) != 0 {
+		t.Errorf("expected no reboot calls within threshold, got %v", exec.calls)
 	}
 }
