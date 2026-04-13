@@ -197,7 +197,9 @@ func (w *watcher) run(ctx context.Context) error {
 			continue
 		}
 
-		// At least one checker failed.
+		// At least one checker failed — enter the recovery judgment phase.
+		// The state machine decides the next action (wait, reboot, retry)
+		// regardless of which specific checker(s) failed.
 		isGPU := hasGPU(node)
 		w.states.UpdateCheckerInfo(nodeName, failedCheckers, isGPU)
 
