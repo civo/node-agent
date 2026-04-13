@@ -9,7 +9,7 @@ import (
 )
 
 func TestGPUChecker_Name(t *testing.T) {
-	c := &gpuChecker{desiredCount: 8}
+	c := &gpuChecker{}
 	if got := c.Name(); got != "GPU" {
 		t.Errorf("got %q, want %q", got, "GPU")
 	}
@@ -17,16 +17,17 @@ func TestGPUChecker_Name(t *testing.T) {
 
 func TestGPUChecker_Check(t *testing.T) {
 	tests := []struct {
-		name    string
-		desired int
-		node    *corev1.Node
-		want    bool
+		name string
+		node *corev1.Node
+		want bool
 	}{
 		{
-			name:    "Returns true when GPU count matches desired",
-			desired: 8,
+			name: "Returns true when allocatable matches label count",
 			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "node-01",
+					Labels: map[string]string{gpuCountLabel: "8"},
+				},
 				Status: corev1.NodeStatus{
 					Allocatable: corev1.ResourceList{
 						gpuResourceName: resource.MustParse("8"),
@@ -36,8 +37,7 @@ func TestGPUChecker_Check(t *testing.T) {
 			want: true,
 		},
 		{
-			name:    "Returns true when desired is 0 (check skipped)",
-			desired: 0,
+			name: "Returns true when gpu.count label is absent (non-GPU node)",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
 				Status: corev1.NodeStatus{
@@ -47,10 +47,25 @@ func TestGPUChecker_Check(t *testing.T) {
 			want: true,
 		},
 		{
-			name:    "Returns false when GPU count is less than desired",
-			desired: 8,
+			name: "Returns true when gpu.count label is 0",
 			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "node-01",
+					Labels: map[string]string{gpuCountLabel: "0"},
+				},
+				Status: corev1.NodeStatus{
+					Allocatable: corev1.ResourceList{},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "Returns false when allocatable is less than label count",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "node-01",
+					Labels: map[string]string{gpuCountLabel: "8"},
+				},
 				Status: corev1.NodeStatus{
 					Allocatable: corev1.ResourceList{
 						gpuResourceName: resource.MustParse("7"),
@@ -60,10 +75,12 @@ func TestGPUChecker_Check(t *testing.T) {
 			want: false,
 		},
 		{
-			name:    "Returns false when GPU count is zero",
-			desired: 8,
+			name: "Returns false when allocatable GPU is zero",
 			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "node-01",
+					Labels: map[string]string{gpuCountLabel: "8"},
+				},
 				Status: corev1.NodeStatus{
 					Allocatable: corev1.ResourceList{
 						gpuResourceName: resource.MustParse("0"),
@@ -73,21 +90,36 @@ func TestGPUChecker_Check(t *testing.T) {
 			want: false,
 		},
 		{
-			name:    "Returns false when no GPU resource in allocatable",
-			desired: 8,
+			name: "Returns false when allocatable GPU resource is missing",
 			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "node-01",
+					Labels: map[string]string{gpuCountLabel: "8"},
+				},
 				Status: corev1.NodeStatus{
 					Allocatable: corev1.ResourceList{},
 				},
 			},
 			want: false,
 		},
+		{
+			name: "Returns true when gpu.count label is invalid",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "node-01",
+					Labels: map[string]string{gpuCountLabel: "invalid"},
+				},
+				Status: corev1.NodeStatus{
+					Allocatable: corev1.ResourceList{},
+				},
+			},
+			want: true,
+		},
 	}
 
+	c := &gpuChecker{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := &gpuChecker{desiredCount: tt.desired}
 			if got := c.Check(tt.node); got != tt.want {
 				t.Errorf("got %v, want %v", got, tt.want)
 			}
@@ -96,32 +128,17 @@ func TestGPUChecker_Check(t *testing.T) {
 }
 
 func TestNewDefaultCheckers(t *testing.T) {
-	t.Run("GPU disabled when desiredCount is 0", func(t *testing.T) {
-		checkers := NewDefaultCheckers(0)
-		if len(checkers) != 2 {
-			t.Fatalf("expected 2 checkers, got %d", len(checkers))
-		}
-		if checkers[0].Name() != "NodeReady" {
-			t.Errorf("expected NodeReady checker first, got %q", checkers[0].Name())
-		}
-		if checkers[1].Name() != "DiskPressure" {
-			t.Errorf("expected DiskPressure checker second, got %q", checkers[1].Name())
-		}
-	})
-
-	t.Run("GPU enabled when desiredCount is positive", func(t *testing.T) {
-		checkers := NewDefaultCheckers(8)
-		if len(checkers) != 3 {
-			t.Fatalf("expected 3 checkers, got %d", len(checkers))
-		}
-		if checkers[0].Name() != "NodeReady" {
-			t.Errorf("expected NodeReady checker first, got %q", checkers[0].Name())
-		}
-		if checkers[1].Name() != "DiskPressure" {
-			t.Errorf("expected DiskPressure checker second, got %q", checkers[1].Name())
-		}
-		if checkers[2].Name() != "GPU" {
-			t.Errorf("expected GPU checker third, got %q", checkers[2].Name())
-		}
-	})
+	checkers := NewDefaultCheckers()
+	if len(checkers) != 3 {
+		t.Fatalf("expected 3 checkers, got %d", len(checkers))
+	}
+	if checkers[0].Name() != "NodeReady" {
+		t.Errorf("expected NodeReady checker first, got %q", checkers[0].Name())
+	}
+	if checkers[1].Name() != "DiskPressure" {
+		t.Errorf("expected DiskPressure checker second, got %q", checkers[1].Name())
+	}
+	if checkers[2].Name() != "GPU" {
+		t.Errorf("expected GPU checker third, got %q", checkers[2].Name())
+	}
 }

@@ -18,14 +18,12 @@ type HealthChecker interface {
 }
 
 // NewDefaultCheckers returns the enabled health checkers.
-// GPUChecker is included only when desiredGPUCount > 0.
-func NewDefaultCheckers(desiredGPUCount int) []HealthChecker {
-	checkers := []HealthChecker{
+// GPU checker is always included; it auto-skips non-GPU nodes
+// by checking for the nvidia.com/gpu.count label.
+func NewDefaultCheckers() []HealthChecker {
+	return []HealthChecker{
 		&nodeReadyChecker{},
 		&diskPressureChecker{},
+		&gpuChecker{},
 	}
-	if desiredGPUCount > 0 {
-		checkers = append(checkers, &gpuChecker{desiredCount: desiredGPUCount})
-	}
-	return checkers
 }

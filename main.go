@@ -30,7 +30,6 @@ var (
 	region                  = strings.TrimSpace(os.Getenv("CIVO_REGION"))
 	clusterID               = strings.TrimSpace(os.Getenv("CIVO_CLUSTER_ID"))
 	nodePoolID              = strings.TrimSpace(os.Getenv("CIVO_NODE_POOL_ID"))
-	nodeDesiredGPUCount     = strings.TrimSpace(os.Getenv("CIVO_NODE_DESIRED_GPU_COUNT"))
 	rebootTimeWindowMinutes = strings.TrimSpace(os.Getenv("CIVO_NODE_REBOOT_TIME_WINDOW_MINUTES"))
 	monitorOnly             = strings.TrimSpace(os.Getenv("CIVO_NODE_MONITOR_ONLY"))
 	metricsPort             = strings.TrimSpace(os.Getenv("CIVO_NODE_METRICS_PORT"))
@@ -49,7 +48,7 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialise executor: %w", err)
 	}
-	checkers := health.NewDefaultCheckers(parseUintOrZero(nodeDesiredGPUCount))
+	checkers := health.NewDefaultCheckers()
 
 	monitorOnlyFlag := true
 	if v, err := strconv.ParseBool(monitorOnly); err == nil {
@@ -115,18 +114,4 @@ func parseNodePoolIDs(s string) []string {
 		}
 	}
 	return ids
-}
-
-func parseUintOrZero(s string) int {
-	if s == "" {
-		return 0
-	}
-	v, err := strconv.Atoi(s)
-	if err != nil {
-		return 0
-	}
-	if v < 0 {
-		return 0
-	}
-	return v
 }

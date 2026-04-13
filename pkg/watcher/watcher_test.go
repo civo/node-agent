@@ -87,6 +87,7 @@ func newTestNode(name string, ready corev1.ConditionStatus, gpuCount int) *corev
 		},
 	}
 	if gpuCount > 0 {
+		node.Labels["nvidia.com/gpu.count"] = strconv.Itoa(gpuCount)
 		node.Status.Allocatable = corev1.ResourceList{
 			gpuResourceName: resource.MustParse(strconv.Itoa(gpuCount)),
 		}
@@ -225,7 +226,7 @@ func TestRun_HealthyNodeStaysHealthy(t *testing.T) {
 	node := newTestNode("node-01", corev1.ConditionTrue, 8)
 	w := newTestWatcher(t,
 		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
-		WithCheckers(health.NewDefaultCheckers(8)),
+		WithCheckers(health.NewDefaultCheckers()),
 	)
 
 	if err := w.run(t.Context()); err != nil {
@@ -246,7 +247,7 @@ func TestRun_UnhealthyDetection(t *testing.T) {
 	node := newTestNode("node-01", corev1.ConditionFalse, 8)
 	w := newTestWatcher(t,
 		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
-		WithCheckers(health.NewDefaultCheckers(8)),
+		WithCheckers(health.NewDefaultCheckers()),
 		WithNowFunc(func() time.Time { return now }),
 	)
 
@@ -269,7 +270,7 @@ func TestRun_RebootTriggerActiveMode(t *testing.T) {
 	exec := &mockExecutor{}
 	w := newTestWatcher(t,
 		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
-		WithCheckers(health.NewDefaultCheckers(8)),
+		WithCheckers(health.NewDefaultCheckers()),
 		WithExecutor(exec),
 		WithMonitorOnly(false),
 		WithNowFunc(func() time.Time { return now }),
@@ -306,7 +307,7 @@ func TestRun_RebootSkippedInReportMode(t *testing.T) {
 	exec := &mockExecutor{}
 	w := newTestWatcher(t,
 		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
-		WithCheckers(health.NewDefaultCheckers(8)),
+		WithCheckers(health.NewDefaultCheckers()),
 		WithExecutor(exec),
 		WithMonitorOnly(true),
 		WithNowFunc(func() time.Time { return now }),
@@ -339,7 +340,7 @@ func TestRun_RecoveryAfterReboot(t *testing.T) {
 	node := newTestNode("node-01", corev1.ConditionFalse, 8)
 	w := newTestWatcher(t,
 		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
-		WithCheckers(health.NewDefaultCheckers(8)),
+		WithCheckers(health.NewDefaultCheckers()),
 		WithMonitorOnly(false),
 		WithNowFunc(func() time.Time { return now }),
 	)
@@ -378,7 +379,7 @@ func TestRun_RebootRetry(t *testing.T) {
 	exec := &mockExecutor{}
 	w := newTestWatcher(t,
 		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
-		WithCheckers(health.NewDefaultCheckers(8)),
+		WithCheckers(health.NewDefaultCheckers()),
 		WithExecutor(exec),
 		WithMonitorOnly(false),
 		WithRebootTimeWindowMinutes("40"),
@@ -424,10 +425,12 @@ func TestRun_RebootRetry(t *testing.T) {
 
 func TestRun_GPUMismatchTriggersUnhealthy(t *testing.T) {
 	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
-	node := newTestNode("node-01", corev1.ConditionTrue, 7) // 7 GPUs, desired 8
+	node := newTestNode("node-01", corev1.ConditionTrue, 8)
+	// Simulate GPU failure: label says 8 but only 7 allocatable.
+	node.Status.Allocatable[gpuResourceName] = resource.MustParse("7")
 	w := newTestWatcher(t,
 		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
-		WithCheckers(health.NewDefaultCheckers(8)),
+		WithCheckers(health.NewDefaultCheckers()),
 		WithNowFunc(func() time.Time { return now }),
 	)
 
@@ -454,7 +457,7 @@ func TestRun_RebootErrorContinuesProcessing(t *testing.T) {
 	}
 	w := newTestWatcher(t,
 		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
-		WithCheckers(health.NewDefaultCheckers(0)),
+		WithCheckers(health.NewDefaultCheckers()),
 		WithExecutor(exec),
 		WithMonitorOnly(false),
 		WithNowFunc(func() time.Time { return now }),
@@ -479,7 +482,7 @@ func TestRun_RebootErrorContinuesProcessing(t *testing.T) {
 func TestRun_NodeListError(t *testing.T) {
 	w := newTestWatcher(t,
 		WithNodeLister(&fakeNodeLister{err: fmt.Errorf("list error")}),
-		WithCheckers(health.NewDefaultCheckers(0)),
+		WithCheckers(health.NewDefaultCheckers()),
 	)
 
 	if err := w.run(t.Context()); err == nil {
@@ -493,7 +496,7 @@ func TestRun_StaleStateCleanup(t *testing.T) {
 	lister := &fakeNodeLister{nodes: []*corev1.Node{node}}
 	w := newTestWatcher(t,
 		WithNodeLister(lister),
-		WithCheckers(health.NewDefaultCheckers(0)),
+		WithCheckers(health.NewDefaultCheckers()),
 		WithNowFunc(func() time.Time { return now }),
 	)
 
@@ -523,7 +526,7 @@ func TestRun_UnhealthyWithinThresholdNoReboot(t *testing.T) {
 	exec := &mockExecutor{}
 	w := newTestWatcher(t,
 		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
-		WithCheckers(health.NewDefaultCheckers(0)),
+		WithCheckers(health.NewDefaultCheckers()),
 		WithExecutor(exec),
 		WithMonitorOnly(false),
 		WithNowFunc(func() time.Time { return now }),
