@@ -66,7 +66,6 @@ func (c *alwaysFailChecker) Threshold() time.Duration { return c.threshold }
 // --- Test variables ---
 
 var (
-	testClusterID               = "test-cluster-123"
 	testNodePoolID              = "test-node-pool"
 	testRebootTimeWindowMinutes = time.Duration(40)
 )
@@ -103,7 +102,6 @@ func newTestWatcher(t *testing.T, opts ...Option) *watcher {
 		WithExecutor(&mockExecutor{}),
 	}
 	w, err := NewWatcher(t.Context(),
-		testClusterID,
 		append(baseOpts, opts...)...)
 	if err != nil {
 		t.Fatal(err)
@@ -115,8 +113,7 @@ func newTestWatcher(t *testing.T, opts ...Option) *watcher {
 
 func TestNew(t *testing.T) {
 	type args struct {
-		clusterID string
-		opts      []Option
+		opts []Option
 	}
 	type test struct {
 		name      string
@@ -129,7 +126,6 @@ func TestNew(t *testing.T) {
 		{
 			name: "Returns no error when given valid input",
 			args: args{
-				clusterID: testClusterID,
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithExecutor(&mockExecutor{}),
@@ -137,9 +133,6 @@ func TestNew(t *testing.T) {
 				},
 			},
 			checkFunc: func(w *watcher) error {
-				if w.clusterID != testClusterID {
-					return fmt.Errorf("clusterID mismatch: got %s, want %s", w.clusterID, testClusterID)
-				}
 				if w.nodeSelector == nil || w.nodeSelector.MatchLabels[nodePoolLabelKey] != testNodePoolID {
 					return fmt.Errorf("nodeSelector mismatch: got %v, want %s", w.nodeSelector, testNodePoolID)
 				}
@@ -164,8 +157,6 @@ func TestNew(t *testing.T) {
 		{
 			name: "Returns no error when input is invalid, but default value is set",
 			args: args{
-				clusterID: testClusterID,
-
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithExecutor(&mockExecutor{}),
@@ -180,23 +171,11 @@ func TestNew(t *testing.T) {
 				return nil
 			},
 		},
-		{
-			name: "Returns an error when clusterID is missing",
-			args: args{
-
-				opts: []Option{
-					WithKubernetesClient(fake.NewSimpleClientset()),
-					WithExecutor(&mockExecutor{}),
-				},
-			},
-			wantErr: true,
-		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			w, err := NewWatcher(t.Context(),
-				test.args.clusterID,
 				test.args.opts...)
 			if (err != nil) != test.wantErr {
 				t.Errorf("error = %v, wantErr %v", err, test.wantErr)

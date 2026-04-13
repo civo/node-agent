@@ -33,7 +33,6 @@ type watcher struct {
 	client        kubernetes.Interface
 	clientCfgPath string
 
-	clusterID               string
 	nodePoolIDs             []string
 	rebootTimeWindowMinutes time.Duration
 
@@ -47,19 +46,14 @@ type watcher struct {
 	nowFunc     func() time.Time
 }
 
-func NewWatcher(ctx context.Context, clusterID string, opts ...Option) (Watcher, error) {
+func NewWatcher(ctx context.Context, opts ...Option) (Watcher, error) {
 	w := &watcher{
-		clusterID:   clusterID,
 		monitorOnly: true,
 		states:      NewStateStore(),
 		nowFunc:     time.Now,
 	}
 	for _, opt := range append(defaultOptions, opts...) {
 		opt(w)
-	}
-
-	if clusterID == "" {
-		return nil, fmt.Errorf("cluster ID must not be empty")
 	}
 
 	w.nodeSelector = buildNodeSelector(w.nodePoolIDs)
