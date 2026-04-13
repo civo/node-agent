@@ -54,10 +54,14 @@ func (m *mockExecutor) Reboot(ctx context.Context, nodeName string) error {
 }
 
 // alwaysFailChecker is a HealthChecker that always reports unhealthy.
-type alwaysFailChecker struct{ name string }
+type alwaysFailChecker struct {
+	name      string
+	threshold time.Duration
+}
 
-func (c *alwaysFailChecker) Name() string            { return c.name }
-func (c *alwaysFailChecker) Check(*corev1.Node) bool { return false }
+func (c *alwaysFailChecker) Name() string             { return c.name }
+func (c *alwaysFailChecker) Check(*corev1.Node) bool  { return false }
+func (c *alwaysFailChecker) Threshold() time.Duration { return c.threshold }
 
 // --- Test variables ---
 
@@ -293,7 +297,6 @@ func TestRun_RebootTriggerActiveMode(t *testing.T) {
 		WithCheckers(health.NewDefaultCheckers(8)),
 		WithExecutor(exec),
 		WithMonitorOnly(false),
-		WithUnhealthyThresholdMinutes("10"),
 		WithNowFunc(func() time.Time { return now }),
 	)
 
@@ -331,7 +334,6 @@ func TestRun_RebootSkippedInReportMode(t *testing.T) {
 		WithCheckers(health.NewDefaultCheckers(8)),
 		WithExecutor(exec),
 		WithMonitorOnly(true),
-		WithUnhealthyThresholdMinutes("10"),
 		WithNowFunc(func() time.Time { return now }),
 	)
 
@@ -364,7 +366,6 @@ func TestRun_RecoveryAfterReboot(t *testing.T) {
 		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
 		WithCheckers(health.NewDefaultCheckers(8)),
 		WithMonitorOnly(false),
-		WithUnhealthyThresholdMinutes("10"),
 		WithNowFunc(func() time.Time { return now }),
 	)
 
@@ -405,7 +406,6 @@ func TestRun_RebootRetry(t *testing.T) {
 		WithCheckers(health.NewDefaultCheckers(8)),
 		WithExecutor(exec),
 		WithMonitorOnly(false),
-		WithUnhealthyThresholdMinutes("10"),
 		WithRebootTimeWindowMinutes("40"),
 		WithNowFunc(func() time.Time { return now }),
 	)
@@ -482,7 +482,6 @@ func TestRun_RebootErrorContinuesProcessing(t *testing.T) {
 		WithCheckers(health.NewDefaultCheckers(0)),
 		WithExecutor(exec),
 		WithMonitorOnly(false),
-		WithUnhealthyThresholdMinutes("10"),
 		WithNowFunc(func() time.Time { return now }),
 	)
 
@@ -552,7 +551,6 @@ func TestRun_UnhealthyWithinThresholdNoReboot(t *testing.T) {
 		WithCheckers(health.NewDefaultCheckers(0)),
 		WithExecutor(exec),
 		WithMonitorOnly(false),
-		WithUnhealthyThresholdMinutes("10"),
 		WithNowFunc(func() time.Time { return now }),
 	)
 

@@ -24,20 +24,19 @@ var (
 )
 
 var (
-	apiURL                    = strings.TrimSpace(os.Getenv("CIVO_API_URL"))
-	apiKey                    = strings.TrimSpace(os.Getenv("CIVO_API_KEY"))
-	region                    = strings.TrimSpace(os.Getenv("CIVO_REGION"))
-	clusterID                 = strings.TrimSpace(os.Getenv("CIVO_CLUSTER_ID"))
-	nodePoolID                = strings.TrimSpace(os.Getenv("CIVO_NODE_POOL_ID"))
-	nodeDesiredGPUCount       = strings.TrimSpace(os.Getenv("CIVO_NODE_DESIRED_GPU_COUNT"))
-	rebootTimeWindowMinutes   = strings.TrimSpace(os.Getenv("CIVO_NODE_REBOOT_TIME_WINDOW_MINUTES"))
-	monitorOnly               = strings.TrimSpace(os.Getenv("CIVO_NODE_MONITOR_ONLY"))
-	unhealthyThresholdMinutes = strings.TrimSpace(os.Getenv("CIVO_NODE_UNHEALTHY_THRESHOLD_MINUTES"))
-	metricsPort               = strings.TrimSpace(os.Getenv("CIVO_NODE_METRICS_PORT"))
+	apiURL                  = strings.TrimSpace(os.Getenv("CIVO_API_URL"))
+	apiKey                  = strings.TrimSpace(os.Getenv("CIVO_API_KEY"))
+	region                  = strings.TrimSpace(os.Getenv("CIVO_REGION"))
+	clusterID               = strings.TrimSpace(os.Getenv("CIVO_CLUSTER_ID"))
+	nodePoolID              = strings.TrimSpace(os.Getenv("CIVO_NODE_POOL_ID"))
+	nodeDesiredGPUCount     = strings.TrimSpace(os.Getenv("CIVO_NODE_DESIRED_GPU_COUNT"))
+	rebootTimeWindowMinutes = strings.TrimSpace(os.Getenv("CIVO_NODE_REBOOT_TIME_WINDOW_MINUTES"))
+	monitorOnly             = strings.TrimSpace(os.Getenv("CIVO_NODE_MONITOR_ONLY"))
+	metricsPort             = strings.TrimSpace(os.Getenv("CIVO_NODE_METRICS_PORT"))
 )
 
 const (
-	defaultMetricsPort = "9625"
+	defaultMetricsPort = 9625
 )
 
 func run(ctx context.Context) error {
@@ -49,7 +48,7 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialise executor: %w", err)
 	}
-	checkers := health.NewDefaultCheckers(parseIntOrZero(nodeDesiredGPUCount))
+	checkers := health.NewDefaultCheckers(parseUintOrZero(nodeDesiredGPUCount))
 
 	monitorOnlyFlag := true
 	if v, err := strconv.ParseBool(monitorOnly); err == nil {
@@ -61,9 +60,9 @@ func run(ctx context.Context) error {
 		port := defaultMetricsPort
 		// Exclude well known port and negative integers.
 		if v, err := strconv.Atoi(metricsPort); err == nil && v >= 1024 && v <= 65535 {
-			port = metricsPort
+			port = v
 		}
-		addr := ":" + port
+		addr := ":" + strconv.Itoa(port)
 		slog.Info("Starting metrics server", "addr", addr)
 		if err := http.ListenAndServe(addr, metrics.Handler()); err != nil {
 			slog.Error("Metrics server failed", "error", err)
@@ -76,7 +75,6 @@ func run(ctx context.Context) error {
 		watcher.WithMonitorOnly(monitorOnlyFlag),
 		watcher.WithRebootTimeWindowMinutes(rebootTimeWindowMinutes),
 		watcher.WithDesiredGPUCount(nodeDesiredGPUCount),
-		watcher.WithUnhealthyThresholdMinutes(unhealthyThresholdMinutes),
 	)
 	if err != nil {
 		return err
@@ -103,11 +101,16 @@ func main() {
 	}
 }
 
-func parseIntOrZero(s string) int {
+func parseUintOrZero(s string) int {
 	if s == "" {
 		return 0
 	}
-	n := 0
-	fmt.Sscanf(s, "%d", &n)
-	return n
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		return 0
+	}
+	if v < 0 {
+		return 0
+	}
+	return v
 }

@@ -1,6 +1,10 @@
 package health
 
-import corev1 "k8s.io/api/core/v1"
+import (
+	"time"
+
+	corev1 "k8s.io/api/core/v1"
+)
 
 const gpuResourceName = "nvidia.com/gpu"
 
@@ -15,7 +19,8 @@ func NewGPUChecker(desiredCount int) HealthChecker {
 	return &gpuChecker{desiredCount: desiredCount}
 }
 
-func (c *gpuChecker) Name() string { return "GPU" }
+func (c *gpuChecker) Name() string             { return "GPU" }
+func (c *gpuChecker) Threshold() time.Duration { return 10 * time.Minute }
 
 func (c *gpuChecker) Check(node *corev1.Node) bool {
 	if c.desiredCount == 0 {

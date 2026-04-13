@@ -17,7 +17,6 @@ type Option func(*watcher)
 var defaultOptions = []Option{
 	WithRebootTimeWindowMinutes("40"),
 	WithDesiredGPUCount("0"),
-	WithUnhealthyThresholdMinutes("10"),
 }
 
 // WithKubernetesClient returns Option to set Kubernetes API client.
@@ -67,19 +66,6 @@ func WithDesiredGPUCount(s string) Option {
 func WithMonitorOnly(v bool) Option {
 	return func(w *watcher) {
 		w.monitorOnly = v
-	}
-}
-
-// WithUnhealthyThresholdMinutes returns Option to set the duration a node
-// must be continuously unhealthy before a recovery action is triggered.
-func WithUnhealthyThresholdMinutes(s string) Option {
-	return func(w *watcher) {
-		n, err := strconv.Atoi(s)
-		if err == nil && n > 0 {
-			w.unhealthyThreshold = time.Duration(n) * time.Minute
-		} else {
-			slog.Info("UnhealthyThresholdMinutes is invalid", "value", s)
-		}
 	}
 }
 

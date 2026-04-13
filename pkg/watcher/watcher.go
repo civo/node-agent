@@ -40,12 +40,11 @@ type watcher struct {
 	nodeSelector *metav1.LabelSelector
 	nodeLister   listerscorev1.NodeLister
 
-	monitorOnly        bool
-	unhealthyThreshold time.Duration
-	checkers           []health.HealthChecker
-	executor           operation.Executor
-	states             *StateStore
-	nowFunc            func() time.Time
+	monitorOnly bool
+	checkers    []health.HealthChecker
+	executor    operation.Executor
+	states      *StateStore
+	nowFunc     func() time.Time
 }
 
 func NewWatcher(ctx context.Context, clusterID, nodePoolID string, opts ...Option) (Watcher, error) {
@@ -170,12 +169,16 @@ func (w *watcher) run(ctx context.Context) error {
 
 		// Run all health checkers and collect failures.
 		var failedCheckers []string
+		var minThreshold time.Duration
 		for _, checker := range w.checkers {
 			healthy := checker.Check(node)
 			result := "pass"
 			if !healthy {
 				result = "fail"
 				failedCheckers = append(failedCheckers, checker.Name())
+				if minThreshold == 0 || checker.Threshold() < minThreshold {
+					minThreshold = checker.Threshold()
+				}
 			}
 			metrics.HealthCheckTotal.WithLabelValues(nodeName, checker.Name(), result).Inc()
 		}
@@ -216,7 +219,7 @@ func (w *watcher) run(ctx context.Context) error {
 		case PhaseUnhealthy:
 			metrics.NodeUnhealthyDurationSeconds.WithLabelValues(nodeName).Set(
 				now.Sub(state.UnhealthySince()).Seconds())
-			if now.Sub(state.UnhealthySince()) < w.unhealthyThreshold {
+			if now.Sub(state.UnhealthySince()) < minThreshold {
 				continue
 			}
 			if !w.monitorOnly {
