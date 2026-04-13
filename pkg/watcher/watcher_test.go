@@ -88,7 +88,7 @@ func newTestNode(name string, ready corev1.ConditionStatus, gpuCount int) *corev
 	if gpuCount > 0 {
 		node.Labels["nvidia.com/gpu.count"] = strconv.Itoa(gpuCount)
 		node.Status.Allocatable = corev1.ResourceList{
-			gpuResourceName: resource.MustParse(strconv.Itoa(gpuCount)),
+			"nvidia.com/gpu": resource.MustParse(strconv.Itoa(gpuCount)),
 		}
 	}
 	return node
@@ -404,7 +404,7 @@ func TestRun_GPUMismatchTriggersUnhealthy(t *testing.T) {
 	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
 	node := newTestNode("node-01", corev1.ConditionTrue, 8)
 	// Simulate GPU failure: label says 8 but only 7 allocatable.
-	node.Status.Allocatable[gpuResourceName] = resource.MustParse("7")
+	node.Status.Allocatable["nvidia.com/gpu"] = resource.MustParse("7")
 	w := newTestWatcher(t,
 		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
 		WithCheckers(health.NewDefaultCheckers()),

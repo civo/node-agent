@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/civo/node-agent/pkg/health"
@@ -20,10 +21,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-const (
-	nodePoolLabelKey = "kubernetes.civo.com/civo-node-pool"
-	gpuResourceName  = "nvidia.com/gpu"
-)
+const nodePoolLabelKey = "kubernetes.civo.com/civo-node-pool"
 
 type Watcher interface {
 	Run(ctx context.Context) error
@@ -286,11 +284,14 @@ func buildNodeSelector(nodePoolIDs []string) *metav1.LabelSelector {
 	}
 }
 
+// hasGPU returns true if the node has the nvidia.com/gpu.count label
+// with a positive value, indicating it is a GPU node regardless of
+// current GPU health.
 func hasGPU(node *corev1.Node) bool {
-	quantity, exists := node.Status.Allocatable[gpuResourceName]
+	v, exists := node.Labels["nvidia.com/gpu.count"]
 	if !exists {
 		return false
 	}
-	gpuCount, ok := quantity.AsInt64()
-	return ok && gpuCount > 0
+	n, err := strconv.Atoi(v)
+	return err == nil && n > 0
 }
