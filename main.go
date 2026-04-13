@@ -31,8 +31,8 @@ var (
 	clusterID               = strings.TrimSpace(os.Getenv("CIVO_CLUSTER_ID"))
 	nodePoolID              = strings.TrimSpace(os.Getenv("CIVO_NODE_POOL_ID"))
 	rebootTimeWindowMinutes = strings.TrimSpace(os.Getenv("CIVO_NODE_REBOOT_TIME_WINDOW_MINUTES"))
-	monitorOnly             = strings.TrimSpace(os.Getenv("CIVO_NODE_MONITOR_ONLY"))
-	metricsPort             = strings.TrimSpace(os.Getenv("CIVO_NODE_METRICS_PORT"))
+	monitorOnly             = strings.TrimSpace(os.Getenv("CIVO_NODE_AGENT_MONITOR_ONLY"))
+	metricsPort             = strings.TrimSpace(os.Getenv("CIVO_NODE_AGENT_METRICS_PORT"))
 )
 
 const (
