@@ -15,6 +15,7 @@ type HealthChecker interface {
 func NewDefaultCheckers(desiredGPUCount int) []HealthChecker {
 	checkers := []HealthChecker{
 		&nodeReadyChecker{},
+		&diskPressureChecker{},
 	}
 	if desiredGPUCount > 0 {
 		checkers = append(checkers, &gpuChecker{desiredCount: desiredGPUCount})

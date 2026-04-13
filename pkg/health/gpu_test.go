@@ -98,24 +98,30 @@ func TestGPUChecker_Check(t *testing.T) {
 func TestNewDefaultCheckers(t *testing.T) {
 	t.Run("GPU disabled when desiredCount is 0", func(t *testing.T) {
 		checkers := NewDefaultCheckers(0)
-		if len(checkers) != 1 {
-			t.Fatalf("expected 1 checker, got %d", len(checkers))
-		}
-		if checkers[0].Name() != "NodeReady" {
-			t.Errorf("expected NodeReady checker, got %q", checkers[0].Name())
-		}
-	})
-
-	t.Run("GPU enabled when desiredCount is positive", func(t *testing.T) {
-		checkers := NewDefaultCheckers(8)
 		if len(checkers) != 2 {
 			t.Fatalf("expected 2 checkers, got %d", len(checkers))
 		}
 		if checkers[0].Name() != "NodeReady" {
 			t.Errorf("expected NodeReady checker first, got %q", checkers[0].Name())
 		}
-		if checkers[1].Name() != "GPU" {
-			t.Errorf("expected GPU checker second, got %q", checkers[1].Name())
+		if checkers[1].Name() != "DiskPressure" {
+			t.Errorf("expected DiskPressure checker second, got %q", checkers[1].Name())
+		}
+	})
+
+	t.Run("GPU enabled when desiredCount is positive", func(t *testing.T) {
+		checkers := NewDefaultCheckers(8)
+		if len(checkers) != 3 {
+			t.Fatalf("expected 3 checkers, got %d", len(checkers))
+		}
+		if checkers[0].Name() != "NodeReady" {
+			t.Errorf("expected NodeReady checker first, got %q", checkers[0].Name())
+		}
+		if checkers[1].Name() != "DiskPressure" {
+			t.Errorf("expected DiskPressure checker second, got %q", checkers[1].Name())
+		}
+		if checkers[2].Name() != "GPU" {
+			t.Errorf("expected GPU checker third, got %q", checkers[2].Name())
 		}
 	})
 }
