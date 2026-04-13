@@ -70,7 +70,7 @@ func run(ctx context.Context) error {
 		}
 	}()
 
-	w, err := watcher.NewWatcher(ctx, clusterID, nodePoolID,
+	w, err := watcher.NewWatcher(ctx, clusterID, parseNodePoolIDs(nodePoolID),
 		watcher.WithKubernetesClientConfigPath(*kubeconfigPath),
 		watcher.WithExecutor(executor),
 		watcher.WithCheckers(checkers),
@@ -100,6 +100,21 @@ func main() {
 		slog.Error("The node-agent encountered a critical error and will exit", "error", err)
 		os.Exit(1)
 	}
+}
+
+// parseNodePoolIDs splits a comma-separated string into node pool IDs.
+// Empty string returns nil (all node pools).
+func parseNodePoolIDs(s string) []string {
+	if s == "" {
+		return nil
+	}
+	var ids []string
+	for _, id := range strings.Split(s, ",") {
+		if v := strings.TrimSpace(id); v != "" {
+			ids = append(ids, v)
+		}
+	}
+	return ids
 }
 
 func parseUintOrZero(s string) int {

@@ -46,7 +46,7 @@ type watcher struct {
 	nowFunc     func() time.Time
 }
 
-func NewWatcher(ctx context.Context, clusterID, nodePoolID string, opts ...Option) (Watcher, error) {
+func NewWatcher(ctx context.Context, clusterID string, nodePoolIDs []string, opts ...Option) (Watcher, error) {
 	w := &watcher{
 		clusterID:   clusterID,
 		monitorOnly: true,
@@ -60,15 +60,8 @@ func NewWatcher(ctx context.Context, clusterID, nodePoolID string, opts ...Optio
 	if clusterID == "" {
 		return nil, fmt.Errorf("cluster ID must not be empty")
 	}
-	if nodePoolID == "" {
-		return nil, fmt.Errorf("node pool ID must not be empty")
-	}
 
-	w.nodeSelector = &metav1.LabelSelector{
-		MatchLabels: map[string]string{
-			nodePoolLabelKey: nodePoolID,
-		},
-	}
+	w.nodeSelector = buildNodeSelector(nodePoolIDs)
 
 	if err := w.setupKubernetesClient(); err != nil {
 		return nil, err
@@ -269,6 +262,33 @@ func modeLabel(monitorOnly bool) string {
 		return "monitor"
 	}
 	return "active"
+}
+
+// buildNodeSelector builds a LabelSelector based on the given node pool IDs.
+//   - empty:    no selector (all nodes)
+//   - single:   MatchLabels exact match
+//   - multiple: MatchExpressions In operator
+func buildNodeSelector(nodePoolIDs []string) *metav1.LabelSelector {
+	switch len(nodePoolIDs) {
+	case 0:
+		return nil
+	case 1:
+		return &metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				nodePoolLabelKey: nodePoolIDs[0],
+			},
+		}
+	default:
+		return &metav1.LabelSelector{
+			MatchExpressions: []metav1.LabelSelectorRequirement{
+				{
+					Key:      nodePoolLabelKey,
+					Operator: metav1.LabelSelectorOpIn,
+					Values:   nodePoolIDs,
+				},
+			},
+		}
+	}
 }
 
 func hasGPU(node *corev1.Node) bool {
