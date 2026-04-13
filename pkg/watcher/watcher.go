@@ -59,10 +59,10 @@ func NewWatcher(ctx context.Context, clusterID, nodePoolID string, opts ...Optio
 	}
 
 	if clusterID == "" {
-		return nil, fmt.Errorf("CIVO_CLUSTER_ID not set")
+		return nil, fmt.Errorf("cluster ID must not be empty")
 	}
 	if nodePoolID == "" {
-		return nil, fmt.Errorf("CIVO_NODE_POOL_ID not set")
+		return nil, fmt.Errorf("node pool ID must not be empty")
 	}
 
 	w.nodeSelector = &metav1.LabelSelector{
