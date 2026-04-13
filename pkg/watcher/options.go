@@ -3,6 +3,7 @@ package watcher
 import (
 	"log/slog"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/civo/node-agent/pkg/health"
@@ -38,12 +39,15 @@ func WithKubernetesClientConfigPath(path string) Option {
 }
 
 // WithNodePoolIDs returns Option to append node pool IDs to watch.
+// Accepts a comma-separated string (e.g. "pool-1,pool-2").
 // Can be called multiple times to accumulate IDs.
-// If no IDs are provided across all calls, all nodes are watched.
-func WithNodePoolIDs(ids []string) Option {
+// Empty string is a no-op. If no IDs are provided across all calls, all nodes are watched.
+func WithNodePoolIDs(s string) Option {
 	return func(w *watcher) {
-		if len(ids) > 0 {
-			w.nodePoolIDs = append(w.nodePoolIDs, ids...)
+		for _, id := range strings.Split(s, ",") {
+			if v := strings.TrimSpace(id); v != "" {
+				w.nodePoolIDs = append(w.nodePoolIDs, v)
+			}
 		}
 	}
 }

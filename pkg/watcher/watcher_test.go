@@ -129,7 +129,7 @@ func TestNew(t *testing.T) {
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
 					WithExecutor(&mockExecutor{}),
-					WithNodePoolIDs([]string{testNodePoolID}),
+					WithNodePoolIDs(testNodePoolID),
 				},
 			},
 			checkFunc: func(w *watcher) error {
