@@ -10,7 +10,7 @@ type HealthChecker interface {
 	Check(node *corev1.Node) bool
 }
 
-// NewDefaultCheckers returns the enabled health checkers for the MVP.
+// NewDefaultCheckers returns the enabled health checkers.
 // GPUChecker is included only when desiredGPUCount > 0.
 func NewDefaultCheckers(desiredGPUCount int) []HealthChecker {
 	checkers := []HealthChecker{
