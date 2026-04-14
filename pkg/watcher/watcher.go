@@ -47,7 +47,7 @@ func NewWatcher(ctx context.Context, opts ...Option) (Watcher, error) {
 	w := &watcher{
 		monitorOnly: true,
 		states:      NewStateStore(),
-		nowFunc:     time.Now,
+		nowFunc:     func() time.Time { return time.Now().UTC() },
 	}
 	for _, opt := range append(defaultOptions, opts...) {
 		opt(w)
