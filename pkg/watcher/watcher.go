@@ -33,8 +33,8 @@ type watcher struct {
 	rebootWaitMinutes    time.Duration // Standard nodes (default: 10)
 	gpuRebootWaitMinutes time.Duration // GPU nodes (default: 40)
 
-	nodeSelector *metav1.LabelSelector
-	nodeLister   listerscorev1.NodeLister
+	nodeLabelSelector *metav1.LabelSelector
+	nodeLister        listerscorev1.NodeLister
 
 	monitorOnly bool
 	checkers    []health.HealthChecker
@@ -53,7 +53,7 @@ func NewWatcher(ctx context.Context, opts ...Option) (Watcher, error) {
 		opt(w)
 	}
 
-	w.nodeSelector = buildNodeSelector(w.nodePoolIDs)
+	w.nodeLabelSelector = buildNodeSelector(w.nodePoolIDs)
 
 	if err := w.setupKubernetesClient(); err != nil {
 		return nil, err
@@ -95,12 +95,11 @@ func (w *watcher) setupInformer(ctx context.Context) error {
 		return nil
 	}
 
-	labelSelector := metav1.FormatLabelSelector(w.nodeSelector)
 	factory := informers.NewSharedInformerFactoryWithOptions(
 		w.client,
 		0,
 		informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
-			opts.LabelSelector = labelSelector
+			opts.LabelSelector = metav1.FormatLabelSelector(w.nodeLabelSelector)
 		}),
 	)
 

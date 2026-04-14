@@ -133,8 +133,8 @@ func TestNew(t *testing.T) {
 				},
 			},
 			checkFunc: func(w *watcher) error {
-				if w.nodeSelector == nil || w.nodeSelector.MatchLabels[nodePoolLabelKey] != testNodePoolID {
-					return fmt.Errorf("nodeSelector mismatch: got %v, want %s", w.nodeSelector, testNodePoolID)
+				if w.nodeLabelSelector == nil || w.nodeLabelSelector.MatchLabels[nodePoolLabelKey] != testNodePoolID {
+					return fmt.Errorf("nodeLabelSelector mismatch: got %v, want %s", w.nodeLabelSelector, testNodePoolID)
 				}
 				if w.client == nil {
 					return fmt.Errorf("client is nil")
