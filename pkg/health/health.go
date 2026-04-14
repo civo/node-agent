@@ -18,12 +18,13 @@ type HealthChecker interface {
 }
 
 // NewDefaultCheckers returns the enabled health checkers.
-// GPU checker is always included; it auto-skips non-GPU nodes
-// by checking for the nvidia.com/gpu.count label.
+// GPU checker auto-skips non-GPU nodes by checking the nvidia.com/gpu.count label.
+// Cilium checker auto-skips nodes without CiliumAgentIsReady condition.
 func NewDefaultCheckers() []HealthChecker {
 	return []HealthChecker{
 		&nodeReadyChecker{},
 		&diskPressureChecker{},
+		&ciliumChecker{},
 		&gpuChecker{},
 	}
 }

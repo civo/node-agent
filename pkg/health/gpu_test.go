@@ -129,16 +129,13 @@ func TestGPUChecker_Check(t *testing.T) {
 
 func TestNewDefaultCheckers(t *testing.T) {
 	checkers := NewDefaultCheckers()
-	if len(checkers) != 3 {
-		t.Fatalf("expected 3 checkers, got %d", len(checkers))
+	if len(checkers) != 4 {
+		t.Fatalf("expected 4 checkers, got %d", len(checkers))
 	}
-	if checkers[0].Name() != "NodeReady" {
-		t.Errorf("expected NodeReady checker first, got %q", checkers[0].Name())
-	}
-	if checkers[1].Name() != "DiskPressure" {
-		t.Errorf("expected DiskPressure checker second, got %q", checkers[1].Name())
-	}
-	if checkers[2].Name() != "GPU" {
-		t.Errorf("expected GPU checker third, got %q", checkers[2].Name())
+	expected := []string{"NodeReady", "DiskPressure", "CiliumAgent", "GPU"}
+	for i, name := range expected {
+		if checkers[i].Name() != name {
+			t.Errorf("checkers[%d]: expected %q, got %q", i, name, checkers[i].Name())
+		}
 	}
 }
