@@ -31,7 +31,7 @@ func WithKubernetesClient(client kubernetes.Interface) Option {
 	}
 }
 
-// WithKubernetesClient returns Option to set Kubernetes config path.
+// WithKubernetesClientConfigPath returns Option to set Kubernetes config path.
 func WithKubernetesClientConfigPath(path string) Option {
 	return func(w *watcher) {
 		if path != "" {

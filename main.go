@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/civo/node-agent/pkg/health"
 	"github.com/civo/node-agent/pkg/metrics"
@@ -52,16 +53,21 @@ func run(ctx context.Context) error {
 	checkers := health.NewDefaultCheckers()
 
 	metrics.Register()
+	metricsServer := &http.Server{
+		Addr:    ":" + metricsPortValue(metricsPort),
+		Handler: metrics.Handler(),
+	}
 	go func() {
-		port := defaultMetricsPort
-		// Exclude well known port and negative integers.
-		if v, err := strconv.Atoi(metricsPort); err == nil && v >= 1024 && v <= 65535 {
-			port = v
-		}
-		addr := ":" + strconv.Itoa(port)
-		slog.Info("Starting metrics server", "addr", addr)
-		if err := http.ListenAndServe(addr, metrics.Handler()); err != nil {
+		slog.Info("Starting metrics server", "addr", metricsServer.Addr)
+		if err := metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("Metrics server failed", "error", err)
+		}
+	}()
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := metricsServer.Shutdown(shutdownCtx); err != nil {
+			slog.Error("Metrics server shutdown failed", "error", err)
 		}
 	}()
 
@@ -97,4 +103,11 @@ func main() {
 		slog.Error("The node-agent encountered a critical error and will exit", "error", err)
 		os.Exit(1)
 	}
+}
+
+func metricsPortValue(s string) string {
+	if v, err := strconv.Atoi(s); err == nil && v >= 1024 && v <= 65535 {
+		return s
+	}
+	return strconv.Itoa(defaultMetricsPort)
 }
