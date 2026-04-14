@@ -21,47 +21,59 @@ func TestCiliumChecker_Check(t *testing.T) {
 		want bool
 	}{
 		{
-			name: "Returns true when CiliumAgentIsReady is True",
+			name: "Returns true when NetworkUnavailable is False with CiliumIsUp",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
 				Status: corev1.NodeStatus{
 					Conditions: []corev1.NodeCondition{
-						{Type: ciliumAgentConditionType, Status: corev1.ConditionTrue},
+						{
+							Type:   corev1.NodeNetworkUnavailable,
+							Status: corev1.ConditionFalse,
+							Reason: ciliumReadyReason,
+						},
 					},
 				},
 			},
 			want: true,
 		},
 		{
-			name: "Returns false when CiliumAgentIsReady is False",
+			name: "Returns false when NetworkUnavailable is True with CiliumIsUp",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
 				Status: corev1.NodeStatus{
 					Conditions: []corev1.NodeCondition{
-						{Type: ciliumAgentConditionType, Status: corev1.ConditionFalse},
+						{
+							Type:   corev1.NodeNetworkUnavailable,
+							Status: corev1.ConditionTrue,
+							Reason: ciliumReadyReason,
+						},
 					},
 				},
 			},
 			want: false,
 		},
 		{
-			name: "Returns true when condition is absent (Cilium not installed)",
+			name: "Returns true when NetworkUnavailable has non-Cilium reason (skip)",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
 				Status: corev1.NodeStatus{
-					Conditions: []corev1.NodeCondition{},
+					Conditions: []corev1.NodeCondition{
+						{
+							Type:   corev1.NodeNetworkUnavailable,
+							Status: corev1.ConditionFalse,
+							Reason: "FlannelIsUp",
+						},
+					},
 				},
 			},
 			want: true,
 		},
 		{
-			name: "Returns true when only other conditions present",
+			name: "Returns true when condition is absent",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
 				Status: corev1.NodeStatus{
-					Conditions: []corev1.NodeCondition{
-						{Type: corev1.NodeReady, Status: corev1.ConditionTrue},
-					},
+					Conditions: []corev1.NodeCondition{},
 				},
 			},
 			want: true,
