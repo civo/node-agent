@@ -9,6 +9,7 @@ import (
 	"github.com/civo/node-agent/pkg/health"
 	"github.com/civo/node-agent/pkg/metrics"
 	"github.com/civo/node-agent/pkg/operation"
+	"github.com/prometheus/client_golang/prometheus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
@@ -254,6 +255,16 @@ func (w *watcher) run(ctx context.Context) error {
 		}
 	}
 
+	// Clean up state and metrics for nodes no longer in the cluster.
+	w.states.Range(func(name string, _ *NodeState) bool {
+		if _, ok := activeNodes[name]; !ok {
+			metrics.NodeUnhealthyDurationSeconds.DeleteLabelValues(name)
+			metrics.HealthCheckTotal.DeletePartialMatch(prometheus.Labels{"node": name})
+			metrics.RecoveryActionsTotal.DeletePartialMatch(prometheus.Labels{"node": name})
+			metrics.RecoveryPhase.DeletePartialMatch(prometheus.Labels{"node": name})
+		}
+		return true
+	})
 	w.states.Cleanup(activeNodes)
 	return nil
 }
