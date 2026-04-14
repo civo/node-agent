@@ -1,6 +1,7 @@
 package health
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -20,23 +21,26 @@ type gpuChecker struct{}
 func (c *gpuChecker) Name() string             { return "GPU" }
 func (c *gpuChecker) Threshold() time.Duration { return 10 * time.Minute }
 
-func (c *gpuChecker) Check(node *corev1.Node) bool {
+func (c *gpuChecker) Check(node *corev1.Node) (bool, string) {
 	expected, ok := expectedGPUCount(node)
 	if !ok || expected == 0 {
-		return true
+		return true, "non-GPU node"
 	}
 
 	quantity, exists := node.Status.Allocatable[gpuResourceName]
 	if !exists || quantity.IsZero() {
-		return false
+		return false, fmt.Sprintf("expected %d but got 0", expected)
 	}
 
 	actual, ok := quantity.AsInt64()
 	if !ok {
-		return false
+		return false, "failed to read allocatable GPU count"
 	}
 
-	return actual == int64(expected)
+	if actual == int64(expected) {
+		return true, fmt.Sprintf("%d/%d", actual, expected)
+	}
+	return false, fmt.Sprintf("expected %d but got %d", expected, actual)
 }
 
 // expectedGPUCount reads the nvidia.com/gpu.count label from the node.

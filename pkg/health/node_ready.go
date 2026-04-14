@@ -12,11 +12,11 @@ type nodeReadyChecker struct{}
 func (c *nodeReadyChecker) Name() string             { return "NodeReady" }
 func (c *nodeReadyChecker) Threshold() time.Duration { return 5 * time.Minute }
 
-func (c *nodeReadyChecker) Check(node *corev1.Node) bool {
+func (c *nodeReadyChecker) Check(node *corev1.Node) (bool, string) {
 	for _, cond := range node.Status.Conditions {
 		if cond.Type == corev1.NodeReady {
-			return cond.Status == corev1.ConditionTrue
+			return cond.Status == corev1.ConditionTrue, cond.Reason
 		}
 	}
-	return false
+	return false, "NodeReady condition not found"
 }

@@ -157,16 +157,14 @@ func (w *watcher) run(ctx context.Context) error {
 		var failedCheckers []string
 		var minThreshold time.Duration
 		for _, checker := range w.checkers {
-			healthy := checker.Check(node)
-			result := "pass"
+			healthy, reason := checker.Check(node)
 			if !healthy {
-				result = "fail"
 				failedCheckers = append(failedCheckers, checker.Name())
 				if minThreshold == 0 || checker.Threshold() < minThreshold {
 					minThreshold = checker.Threshold()
 				}
 			}
-			metrics.HealthCheckTotal.WithLabelValues(nodeName, checker.Name(), result).Inc()
+			metrics.HealthCheckTotal.WithLabelValues(nodeName, checker.Name(), reason).Inc()
 		}
 
 		state := w.states.GetOrCreate(nodeName)

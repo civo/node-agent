@@ -16,14 +16,14 @@ type ciliumChecker struct{}
 func (c *ciliumChecker) Name() string             { return "CiliumAgent" }
 func (c *ciliumChecker) Threshold() time.Duration { return 10 * time.Minute }
 
-func (c *ciliumChecker) Check(node *corev1.Node) bool {
+func (c *ciliumChecker) Check(node *corev1.Node) (bool, string) {
 	for _, cond := range node.Status.Conditions {
 		if cond.Type == corev1.NodeNetworkUnavailable {
 			if cond.Reason != ciliumReadyReason {
-				return true
+				return true, cond.Reason
 			}
-			return cond.Status == corev1.ConditionFalse
+			return cond.Status == corev1.ConditionFalse, cond.Reason
 		}
 	}
-	return true
+	return true, "NetworkUnavailable condition not found"
 }

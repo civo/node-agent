@@ -59,9 +59,9 @@ type alwaysFailChecker struct {
 	threshold time.Duration
 }
 
-func (c *alwaysFailChecker) Name() string             { return c.name }
-func (c *alwaysFailChecker) Check(*corev1.Node) bool  { return false }
-func (c *alwaysFailChecker) Threshold() time.Duration { return c.threshold }
+func (c *alwaysFailChecker) Name() string                      { return c.name }
+func (c *alwaysFailChecker) Check(*corev1.Node) (bool, string) { return false, "always fail" }
+func (c *alwaysFailChecker) Threshold() time.Duration          { return c.threshold }
 
 // --- Test variables ---
 

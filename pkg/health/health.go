@@ -10,8 +10,9 @@ import (
 type HealthChecker interface {
 	// Name returns a human-readable identifier for this checker (e.g. "NodeReady").
 	Name() string
-	// Check returns true if the node is healthy for this checker's concern.
-	Check(node *corev1.Node) bool
+	// Check returns whether the node is healthy and a reason string.
+	// On success the reason is empty. On failure it describes what went wrong.
+	Check(node *corev1.Node) (healthy bool, reason string)
 	// Threshold returns how long this checker must continuously fail
 	// before a recovery action is triggered.
 	Threshold() time.Duration
