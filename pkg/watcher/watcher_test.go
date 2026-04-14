@@ -202,7 +202,7 @@ func TestNew(t *testing.T) {
 func TestRun_HealthyNodeStaysHealthy(t *testing.T) {
 	node := newTestNode("node-01", corev1.ConditionTrue, 8)
 	w := newTestWatcher(t,
-		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		withNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
 		WithCheckers(health.NewDefaultCheckers()),
 	)
 
@@ -223,9 +223,9 @@ func TestRun_UnhealthyDetection(t *testing.T) {
 	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
 	node := newTestNode("node-01", corev1.ConditionFalse, 8)
 	w := newTestWatcher(t,
-		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		withNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
 		WithCheckers(health.NewDefaultCheckers()),
-		WithNowFunc(func() time.Time { return now }),
+		withNowFunc(func() time.Time { return now }),
 	)
 
 	if err := w.run(t.Context()); err != nil {
@@ -246,11 +246,11 @@ func TestRun_RebootTriggerActiveMode(t *testing.T) {
 	node := newTestNode("node-01", corev1.ConditionFalse, 8)
 	exec := &mockExecutor{}
 	w := newTestWatcher(t,
-		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		withNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
 		WithCheckers(health.NewDefaultCheckers()),
 		WithExecutor(exec),
 		WithMonitorOnly("false"),
-		WithNowFunc(func() time.Time { return now }),
+		withNowFunc(func() time.Time { return now }),
 	)
 
 	// First run: detect unhealthy.
@@ -283,11 +283,11 @@ func TestRun_RebootSkippedInReportMode(t *testing.T) {
 	node := newTestNode("node-01", corev1.ConditionFalse, 8)
 	exec := &mockExecutor{}
 	w := newTestWatcher(t,
-		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		withNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
 		WithCheckers(health.NewDefaultCheckers()),
 		WithExecutor(exec),
 		WithMonitorOnly("true"),
-		WithNowFunc(func() time.Time { return now }),
+		withNowFunc(func() time.Time { return now }),
 	)
 
 	// First run: detect unhealthy.
@@ -316,10 +316,10 @@ func TestRun_RecoveryAfterReboot(t *testing.T) {
 	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
 	node := newTestNode("node-01", corev1.ConditionFalse, 8)
 	w := newTestWatcher(t,
-		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		withNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
 		WithCheckers(health.NewDefaultCheckers()),
 		WithMonitorOnly("false"),
-		WithNowFunc(func() time.Time { return now }),
+		withNowFunc(func() time.Time { return now }),
 	)
 
 	// Run 1: detect unhealthy.
@@ -355,12 +355,12 @@ func TestRun_RebootRetry(t *testing.T) {
 	node := newTestNode("node-01", corev1.ConditionFalse, 8)
 	exec := &mockExecutor{}
 	w := newTestWatcher(t,
-		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		withNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
 		WithCheckers(health.NewDefaultCheckers()),
 		WithExecutor(exec),
 		WithMonitorOnly("false"),
 		WithGPURebootWaitMinutes("40"),
-		WithNowFunc(func() time.Time { return now }),
+		withNowFunc(func() time.Time { return now }),
 	)
 
 	// Run 1: detect unhealthy.
@@ -406,9 +406,9 @@ func TestRun_GPUMismatchTriggersUnhealthy(t *testing.T) {
 	// Simulate GPU failure: label says 8 but only 7 allocatable.
 	node.Status.Allocatable["nvidia.com/gpu"] = resource.MustParse("7")
 	w := newTestWatcher(t,
-		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		withNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
 		WithCheckers(health.NewDefaultCheckers()),
-		WithNowFunc(func() time.Time { return now }),
+		withNowFunc(func() time.Time { return now }),
 	)
 
 	if err := w.run(t.Context()); err != nil {
@@ -433,11 +433,11 @@ func TestRun_RebootErrorContinuesProcessing(t *testing.T) {
 		},
 	}
 	w := newTestWatcher(t,
-		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		withNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
 		WithCheckers(health.NewDefaultCheckers()),
 		WithExecutor(exec),
 		WithMonitorOnly("false"),
-		WithNowFunc(func() time.Time { return now }),
+		withNowFunc(func() time.Time { return now }),
 	)
 
 	// Run 1: detect unhealthy.
@@ -458,7 +458,7 @@ func TestRun_RebootErrorContinuesProcessing(t *testing.T) {
 
 func TestRun_NodeListError(t *testing.T) {
 	w := newTestWatcher(t,
-		WithNodeLister(&fakeNodeLister{err: fmt.Errorf("list error")}),
+		withNodeLister(&fakeNodeLister{err: fmt.Errorf("list error")}),
 		WithCheckers(health.NewDefaultCheckers()),
 	)
 
@@ -472,9 +472,9 @@ func TestRun_StaleStateCleanup(t *testing.T) {
 	node := newTestNode("node-01", corev1.ConditionFalse, 0)
 	lister := &fakeNodeLister{nodes: []*corev1.Node{node}}
 	w := newTestWatcher(t,
-		WithNodeLister(lister),
+		withNodeLister(lister),
 		WithCheckers(health.NewDefaultCheckers()),
-		WithNowFunc(func() time.Time { return now }),
+		withNowFunc(func() time.Time { return now }),
 	)
 
 	// Run 1: detect node-01 unhealthy.
@@ -502,11 +502,11 @@ func TestRun_UnhealthyWithinThresholdNoReboot(t *testing.T) {
 	node := newTestNode("node-01", corev1.ConditionFalse, 0)
 	exec := &mockExecutor{}
 	w := newTestWatcher(t,
-		WithNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		withNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
 		WithCheckers(health.NewDefaultCheckers()),
 		WithExecutor(exec),
 		WithMonitorOnly("false"),
-		WithNowFunc(func() time.Time { return now }),
+		withNowFunc(func() time.Time { return now }),
 	)
 
 	// Run 1: detect unhealthy.

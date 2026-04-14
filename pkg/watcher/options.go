@@ -105,8 +105,8 @@ func WithExecutor(exec operation.Executor) Option {
 	}
 }
 
-// WithNowFunc returns Option to override the time source (for testing).
-func WithNowFunc(fn func() time.Time) Option {
+// withNowFunc returns Option to override the time source (for testing).
+func withNowFunc(fn func() time.Time) Option {
 	return func(w *watcher) {
 		if fn != nil {
 			w.nowFunc = fn
@@ -114,9 +114,9 @@ func WithNowFunc(fn func() time.Time) Option {
 	}
 }
 
-// WithNodeLister returns Option to inject a node lister (for testing).
+// withNodeLister returns Option to inject a node lister (for testing).
 // When set, the informer setup is skipped.
-func WithNodeLister(lister listerscorev1.NodeLister) Option {
+func withNodeLister(lister listerscorev1.NodeLister) Option {
 	return func(w *watcher) {
 		w.nodeLister = lister
 	}
