@@ -2,10 +2,18 @@ package health
 
 import (
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+func TestNodeReadyChecker_Threshold(t *testing.T) {
+	c := &nodeReadyChecker{}
+	if got := c.Threshold(); got != 5*time.Minute {
+		t.Errorf("got %v, want %v", got, 5*time.Minute)
+	}
+}
 
 func TestNodeReadyChecker_Name(t *testing.T) {
 	c := &nodeReadyChecker{}

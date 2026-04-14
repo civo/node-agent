@@ -528,3 +528,62 @@ func TestRun_UnhealthyWithinThresholdNoReboot(t *testing.T) {
 		t.Errorf("expected no reboot calls within threshold, got %v", exec.calls)
 	}
 }
+
+func TestBuildNodeSelector(t *testing.T) {
+	tests := []struct {
+		name        string
+		nodePoolIDs []string
+		wantNil     bool
+		wantLabels  map[string]string
+		wantInExpr  bool
+	}{
+		{
+			name:    "Returns nil for empty IDs",
+			wantNil: true,
+		},
+		{
+			name:        "Returns MatchLabels for single ID",
+			nodePoolIDs: []string{"pool-1"},
+			wantLabels:  map[string]string{nodePoolLabelKey: "pool-1"},
+		},
+		{
+			name:        "Returns MatchExpressions In for multiple IDs",
+			nodePoolIDs: []string{"pool-1", "pool-2"},
+			wantInExpr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sel := buildNodeSelector(tt.nodePoolIDs)
+			if tt.wantNil {
+				if sel != nil {
+					t.Errorf("expected nil selector, got %v", sel)
+				}
+				return
+			}
+			if sel == nil {
+				t.Fatal("expected non-nil selector")
+			}
+			if tt.wantLabels != nil {
+				for k, v := range tt.wantLabels {
+					if sel.MatchLabels[k] != v {
+						t.Errorf("MatchLabels[%s] = %q, want %q", k, sel.MatchLabels[k], v)
+					}
+				}
+			}
+			if tt.wantInExpr {
+				if len(sel.MatchExpressions) != 1 {
+					t.Fatalf("expected 1 MatchExpression, got %d", len(sel.MatchExpressions))
+				}
+				expr := sel.MatchExpressions[0]
+				if expr.Key != nodePoolLabelKey {
+					t.Errorf("key = %q, want %q", expr.Key, nodePoolLabelKey)
+				}
+				if len(expr.Values) != len(tt.nodePoolIDs) {
+					t.Errorf("values count = %d, want %d", len(expr.Values), len(tt.nodePoolIDs))
+				}
+			}
+		})
+	}
+}

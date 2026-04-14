@@ -91,3 +91,51 @@ func TestCivoExecutor_Reboot(t *testing.T) {
 		})
 	}
 }
+
+func TestNewCivoExecutor_Validation(t *testing.T) {
+	tests := []struct {
+		name    string
+		id      string
+		opts    []Option
+		wantErr bool
+	}{
+		{
+			name: "Returns no error with injected client",
+			id:   "test-cluster",
+			opts: []Option{WithClient(&fakeClient{})},
+		},
+		{
+			name:    "Returns error when clusterID is empty without injected client",
+			id:      "",
+			opts:    []Option{WithAPIConfig("key", "https://api.civo.com", "lon1", "0.0.1")},
+			wantErr: true,
+		},
+		{
+			name:    "Returns error when apiKey is empty",
+			id:      "test-cluster",
+			opts:    []Option{WithAPIConfig("", "https://api.civo.com", "lon1", "0.0.1")},
+			wantErr: true,
+		},
+		{
+			name:    "Returns error when apiURL is empty",
+			id:      "test-cluster",
+			opts:    []Option{WithAPIConfig("key", "", "lon1", "0.0.1")},
+			wantErr: true,
+		},
+		{
+			name:    "Returns error when clusterID is empty even with injected client",
+			id:      "",
+			opts:    []Option{WithClient(&fakeClient{})},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := NewCivoExecutor(tt.id, tt.opts...)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

@@ -2,10 +2,18 @@ package health
 
 import (
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+func TestDiskPressureChecker_Threshold(t *testing.T) {
+	c := &diskPressureChecker{}
+	if got := c.Threshold(); got != 30*time.Minute {
+		t.Errorf("got %v, want %v", got, 30*time.Minute)
+	}
+}
 
 func TestDiskPressureChecker_Name(t *testing.T) {
 	c := &diskPressureChecker{}

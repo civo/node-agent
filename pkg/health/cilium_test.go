@@ -2,10 +2,18 @@ package health
 
 import (
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+func TestCiliumChecker_Threshold(t *testing.T) {
+	c := &ciliumChecker{}
+	if got := c.Threshold(); got != 10*time.Minute {
+		t.Errorf("got %v, want %v", got, 10*time.Minute)
+	}
+}
 
 func TestCiliumChecker_Name(t *testing.T) {
 	c := &ciliumChecker{}
