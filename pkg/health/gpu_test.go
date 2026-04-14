@@ -18,12 +18,12 @@ func TestGPUChecker_Threshold(t *testing.T) {
 
 func TestHasGPU(t *testing.T) {
 	tests := []struct {
-		name string
-		node *corev1.Node
-		want bool
+		description string
+		node        *corev1.Node
+		want        bool
 	}{
 		{
-			name: "Returns true when gpu.count label is positive",
+			description: "returns true when gpu.count label is positive",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "node-01",
@@ -33,14 +33,14 @@ func TestHasGPU(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "Returns false when gpu.count label is absent",
+			description: "returns false when gpu.count label is absent",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
 			},
 			want: false,
 		},
 		{
-			name: "Returns false when gpu.count label is 0",
+			description: "returns false when gpu.count label is 0",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "node-01",
@@ -50,7 +50,7 @@ func TestHasGPU(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "Returns false when gpu.count label is invalid",
+			description: "returns false when gpu.count label is invalid",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "node-01",
@@ -61,10 +61,10 @@ func TestHasGPU(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := HasGPU(tt.node); got != tt.want {
-				t.Errorf("got %v, want %v", got, tt.want)
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			if got := HasGPU(test.node); got != test.want {
+				t.Errorf("got %v, want %v", got, test.want)
 			}
 		})
 	}
@@ -79,12 +79,12 @@ func TestGPUChecker_Name(t *testing.T) {
 
 func TestGPUChecker_Check(t *testing.T) {
 	tests := []struct {
-		name string
-		node *corev1.Node
-		want bool
+		description string
+		node        *corev1.Node
+		want        bool
 	}{
 		{
-			name: "Returns true when allocatable matches label count",
+			description: "returns true when allocatable matches label count",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "node-01",
@@ -99,7 +99,7 @@ func TestGPUChecker_Check(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "Returns true when gpu.count label is absent (non-GPU node)",
+			description: "returns true when gpu.count label is absent (non-GPU node)",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
 				Status: corev1.NodeStatus{
@@ -109,7 +109,7 @@ func TestGPUChecker_Check(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "Returns true when gpu.count label is 0",
+			description: "returns true when gpu.count label is 0",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "node-01",
@@ -122,7 +122,7 @@ func TestGPUChecker_Check(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "Returns false when allocatable is less than label count",
+			description: "returns false when allocatable is less than label count",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "node-01",
@@ -137,7 +137,7 @@ func TestGPUChecker_Check(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "Returns false when allocatable GPU is zero",
+			description: "returns false when allocatable GPU is zero",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "node-01",
@@ -152,7 +152,7 @@ func TestGPUChecker_Check(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "Returns false when allocatable GPU resource is missing",
+			description: "returns false when allocatable GPU resource is missing",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "node-01",
@@ -165,7 +165,7 @@ func TestGPUChecker_Check(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "Returns true when gpu.count label is invalid",
+			description: "returns true when gpu.count label is invalid",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "node-01",
@@ -180,10 +180,10 @@ func TestGPUChecker_Check(t *testing.T) {
 	}
 
 	c := &gpuChecker{}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got, _ := c.Check(tt.node); got != tt.want {
-				t.Errorf("got %v, want %v", got, tt.want)
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			if got, _ := c.Check(test.node); got != test.want {
+				t.Errorf("got %v, want %v", got, test.want)
 			}
 		})
 	}

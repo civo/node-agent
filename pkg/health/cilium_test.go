@@ -24,12 +24,12 @@ func TestCiliumChecker_Name(t *testing.T) {
 
 func TestCiliumChecker_Check(t *testing.T) {
 	tests := []struct {
-		name string
-		node *corev1.Node
-		want bool
+		description string
+		node        *corev1.Node
+		want        bool
 	}{
 		{
-			name: "Returns true when NetworkUnavailable is False with CiliumIsUp",
+			description: "returns true when NetworkUnavailable is False with CiliumIsUp",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
 				Status: corev1.NodeStatus{
@@ -45,7 +45,7 @@ func TestCiliumChecker_Check(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "Returns false when NetworkUnavailable is True with CiliumIsUp",
+			description: "returns false when NetworkUnavailable is True with CiliumIsUp",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
 				Status: corev1.NodeStatus{
@@ -61,7 +61,7 @@ func TestCiliumChecker_Check(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "Returns true when NetworkUnavailable has non-Cilium reason (skip)",
+			description: "skips check when NetworkUnavailable has non-Cilium reason",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
 				Status: corev1.NodeStatus{
@@ -77,7 +77,7 @@ func TestCiliumChecker_Check(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "Returns true when condition is absent",
+			description: "returns true when condition is absent",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
 				Status: corev1.NodeStatus{
@@ -89,10 +89,10 @@ func TestCiliumChecker_Check(t *testing.T) {
 	}
 
 	c := &ciliumChecker{}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got, _ := c.Check(tt.node); got != tt.want {
-				t.Errorf("got %v, want %v", got, tt.want)
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			if got, _ := c.Check(test.node); got != test.want {
+				t.Errorf("got %v, want %v", got, test.want)
 			}
 		})
 	}

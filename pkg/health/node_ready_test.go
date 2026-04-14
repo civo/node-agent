@@ -24,12 +24,12 @@ func TestNodeReadyChecker_Name(t *testing.T) {
 
 func TestNodeReadyChecker_Check(t *testing.T) {
 	tests := []struct {
-		name string
-		node *corev1.Node
-		want bool
+		description string
+		node        *corev1.Node
+		want        bool
 	}{
 		{
-			name: "Returns true when NodeReady condition is True",
+			description: "returns true when NodeReady condition is True",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
 				Status: corev1.NodeStatus{
@@ -41,7 +41,7 @@ func TestNodeReadyChecker_Check(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "Returns false when NodeReady condition is False",
+			description: "returns false when NodeReady condition is False",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
 				Status: corev1.NodeStatus{
@@ -53,7 +53,7 @@ func TestNodeReadyChecker_Check(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "Returns false when no conditions present",
+			description: "returns false when no conditions present",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
 				Status: corev1.NodeStatus{
@@ -63,7 +63,7 @@ func TestNodeReadyChecker_Check(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "Returns false when only non-NodeReady conditions present",
+			description: "returns false when only non-NodeReady conditions present",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
 				Status: corev1.NodeStatus{
@@ -77,10 +77,10 @@ func TestNodeReadyChecker_Check(t *testing.T) {
 	}
 
 	c := &nodeReadyChecker{}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got, _ := c.Check(tt.node); got != tt.want {
-				t.Errorf("got %v, want %v", got, tt.want)
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			if got, _ := c.Check(test.node); got != test.want {
+				t.Errorf("got %v, want %v", got, test.want)
 			}
 		})
 	}

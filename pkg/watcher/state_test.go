@@ -20,10 +20,10 @@ func TestNodePhaseString(t *testing.T) {
 		{NodePhase(99), "Unknown"},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.want, func(t *testing.T) {
-			if got := tt.phase.String(); got != tt.want {
-				t.Errorf("got %q, want %q", got, tt.want)
+	for _, test := range tests {
+		t.Run(test.want, func(t *testing.T) {
+			if got := test.phase.String(); got != test.want {
+				t.Errorf("got %q, want %q", got, test.want)
 			}
 		})
 	}

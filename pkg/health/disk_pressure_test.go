@@ -24,12 +24,12 @@ func TestDiskPressureChecker_Name(t *testing.T) {
 
 func TestDiskPressureChecker_Check(t *testing.T) {
 	tests := []struct {
-		name string
-		node *corev1.Node
-		want bool
+		description string
+		node        *corev1.Node
+		want        bool
 	}{
 		{
-			name: "Returns true when DiskPressure is False (no pressure)",
+			description: "returns true when DiskPressure is False (no pressure)",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
 				Status: corev1.NodeStatus{
@@ -41,7 +41,7 @@ func TestDiskPressureChecker_Check(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "Returns false when DiskPressure is True (under pressure)",
+			description: "returns false when DiskPressure is True (under pressure)",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
 				Status: corev1.NodeStatus{
@@ -53,7 +53,7 @@ func TestDiskPressureChecker_Check(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "Returns true when no conditions present",
+			description: "returns true when no conditions present",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
 				Status: corev1.NodeStatus{
@@ -63,7 +63,7 @@ func TestDiskPressureChecker_Check(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "Returns true when only non-DiskPressure conditions present",
+			description: "returns true when only non-DiskPressure conditions present",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "node-01"},
 				Status: corev1.NodeStatus{
@@ -77,10 +77,10 @@ func TestDiskPressureChecker_Check(t *testing.T) {
 	}
 
 	c := &diskPressureChecker{}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got, _ := c.Check(tt.node); got != tt.want {
-				t.Errorf("got %v, want %v", got, tt.want)
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			if got, _ := c.Check(test.node); got != test.want {
+				t.Errorf("got %v, want %v", got, test.want)
 			}
 		})
 	}

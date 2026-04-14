@@ -116,15 +116,15 @@ func TestNew(t *testing.T) {
 		opts []Option
 	}
 	type test struct {
-		name      string
-		args      args
-		checkFunc func(*watcher) error
-		wantErr   bool
+		description string
+		args        args
+		checkFunc   func(*watcher) error
+		wantErr     bool
 	}
 
 	tests := []test{
 		{
-			name: "Returns no error when given valid input",
+			description: "returns no error when given valid input",
 			args: args{
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
@@ -155,7 +155,7 @@ func TestNew(t *testing.T) {
 			},
 		},
 		{
-			name: "Returns no error when input is invalid, but default value is set",
+			description: "returns no error when input is invalid, but default value is set",
 			args: args{
 				opts: []Option{
 					WithKubernetesClient(fake.NewSimpleClientset()),
@@ -174,7 +174,7 @@ func TestNew(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(test.description, func(t *testing.T) {
 			w, err := NewWatcher(t.Context(),
 				test.args.opts...)
 			if (err != nil) != test.wantErr {
@@ -531,32 +531,32 @@ func TestRun_UnhealthyWithinThresholdNoReboot(t *testing.T) {
 
 func TestBuildNodeSelector(t *testing.T) {
 	tests := []struct {
-		name        string
+		description string
 		nodePoolIDs []string
 		wantNil     bool
 		wantLabels  map[string]string
 		wantInExpr  bool
 	}{
 		{
-			name:    "Returns nil for empty IDs",
-			wantNil: true,
+			description: "returns nil for empty IDs",
+			wantNil:     true,
 		},
 		{
-			name:        "Returns MatchLabels for single ID",
+			description: "returns MatchLabels for single ID",
 			nodePoolIDs: []string{"pool-1"},
 			wantLabels:  map[string]string{nodePoolLabelKey: "pool-1"},
 		},
 		{
-			name:        "Returns MatchExpressions In for multiple IDs",
+			description: "returns MatchExpressions In for multiple IDs",
 			nodePoolIDs: []string{"pool-1", "pool-2"},
 			wantInExpr:  true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			sel := buildNodeSelector(tt.nodePoolIDs)
-			if tt.wantNil {
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			sel := buildNodeSelector(test.nodePoolIDs)
+			if test.wantNil {
 				if sel != nil {
 					t.Errorf("expected nil selector, got %v", sel)
 				}
@@ -565,14 +565,14 @@ func TestBuildNodeSelector(t *testing.T) {
 			if sel == nil {
 				t.Fatal("expected non-nil selector")
 			}
-			if tt.wantLabels != nil {
-				for k, v := range tt.wantLabels {
+			if test.wantLabels != nil {
+				for k, v := range test.wantLabels {
 					if sel.MatchLabels[k] != v {
 						t.Errorf("MatchLabels[%s] = %q, want %q", k, sel.MatchLabels[k], v)
 					}
 				}
 			}
-			if tt.wantInExpr {
+			if test.wantInExpr {
 				if len(sel.MatchExpressions) != 1 {
 					t.Fatalf("expected 1 MatchExpression, got %d", len(sel.MatchExpressions))
 				}
@@ -580,8 +580,8 @@ func TestBuildNodeSelector(t *testing.T) {
 				if expr.Key != nodePoolLabelKey {
 					t.Errorf("key = %q, want %q", expr.Key, nodePoolLabelKey)
 				}
-				if len(expr.Values) != len(tt.nodePoolIDs) {
-					t.Errorf("values count = %d, want %d", len(expr.Values), len(tt.nodePoolIDs))
+				if len(expr.Values) != len(test.nodePoolIDs) {
+					t.Errorf("values count = %d, want %d", len(expr.Values), len(test.nodePoolIDs))
 				}
 			}
 		})
