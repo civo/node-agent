@@ -68,7 +68,7 @@ func (w *watcher) setupKubernetesClient() (err error) {
 	if w.clientCfgPath != "" && w.client == nil {
 		cfg, err := clientcmd.BuildConfigFromFlags("", w.clientCfgPath)
 		if err != nil {
-			return fmt.Errorf("failed to build kubeconfig from path %q: %w", cfg, err)
+			return fmt.Errorf("failed to build kubeconfig from path %q: %w", w.clientCfgPath, err)
 		}
 		w.client, err = kubernetes.NewForConfig(cfg)
 		if err != nil {
