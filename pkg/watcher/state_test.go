@@ -183,10 +183,6 @@ func TestStateStoreUpdateCheckerInfo(t *testing.T) {
 	s.UpdateCheckerInfo("node-01", checkers, true)
 
 	st, _ := s.Get("node-01")
-	got := st.FailedCheckers()
-	if len(got) != 2 || got[0] != "NodeReady" || got[1] != "GPU" {
-		t.Errorf("got failedCheckers %v, want %v", got, checkers)
-	}
 	if !st.IsGPUNode() {
 		t.Error("expected isGPUNode to be true")
 	}
@@ -196,21 +192,6 @@ func TestStateStoreUpdateCheckerInfoNonexistent(t *testing.T) {
 	s := NewStateStore()
 	// Should not panic.
 	s.UpdateCheckerInfo("nonexistent", []string{"NodeReady"}, false)
-}
-
-func TestFailedCheckersReturnsCopy(t *testing.T) {
-	s := NewStateStore()
-	s.GetOrCreate("node-01")
-	s.UpdateCheckerInfo("node-01", []string{"NodeReady"}, false)
-
-	st, _ := s.Get("node-01")
-	got := st.FailedCheckers()
-	got[0] = "mutated"
-
-	original := st.FailedCheckers()
-	if original[0] != "NodeReady" {
-		t.Error("FailedCheckers should return a copy; mutation should not affect internal state")
-	}
 }
 
 func TestStateStoreReset(t *testing.T) {
@@ -239,9 +220,6 @@ func TestStateStoreReset(t *testing.T) {
 	}
 	if !st.LastRebootTime().IsZero() {
 		t.Error("lastRebootTime should be zero after Reset")
-	}
-	if len(st.FailedCheckers()) != 0 {
-		t.Error("failedCheckers should be empty after Reset")
 	}
 	if st.IsGPUNode() {
 		t.Error("isGPUNode should be false after Reset")

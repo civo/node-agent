@@ -57,13 +57,6 @@ func (s *NodeState) LastRebootTime() time.Time { return s.lastRebootTime }
 func (s *NodeState) RebootCount() int          { return s.rebootCount }
 func (s *NodeState) IsGPUNode() bool           { return s.isGPUNode }
 
-// FailedCheckers returns a copy of the failed checker names.
-func (s *NodeState) FailedCheckers() []string {
-	out := make([]string, len(s.failedCheckers))
-	copy(out, s.failedCheckers)
-	return out
-}
-
 // StateStore is a concurrency-safe store for per-node recovery state.
 type StateStore struct {
 	mu    sync.RWMutex
