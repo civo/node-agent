@@ -4,13 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"time"
 
 	"github.com/civo/node-agent/pkg/health"
 	"github.com/civo/node-agent/pkg/metrics"
 	"github.com/civo/node-agent/pkg/operation"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
@@ -187,8 +185,8 @@ func (w *watcher) run(ctx context.Context) error {
 		// At least one checker failed — enter the recovery judgment phase.
 		// The state machine decides the next action (wait, reboot, retry)
 		// regardless of which specific checker(s) failed.
-		isGPU := hasGPU(node)
-		w.states.UpdateCheckerInfo(nodeName, failedCheckers, isGPU)
+		isGPUNode := health.HasGPU(node)
+		w.states.UpdateCheckerInfo(nodeName, failedCheckers, isGPUNode)
 
 		switch state.Phase() {
 		case PhaseHealthy:
@@ -291,16 +289,4 @@ func buildNodeSelector(nodePoolIDs []string) *metav1.LabelSelector {
 			},
 		}
 	}
-}
-
-// hasGPU returns true if the node has the nvidia.com/gpu.count label
-// with a positive value, indicating it is a GPU node regardless of
-// current GPU health.
-func hasGPU(node *corev1.Node) bool {
-	v, exists := node.Labels["nvidia.com/gpu.count"]
-	if !exists {
-		return false
-	}
-	n, err := strconv.Atoi(v)
-	return err == nil && n > 0
 }

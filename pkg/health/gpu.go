@@ -43,6 +43,14 @@ func (c *gpuChecker) Check(node *corev1.Node) (bool, string) {
 	return false, fmt.Sprintf("Expected %d but got %d", expected, actual)
 }
 
+// HasGPU returns true if the node has the nvidia.com/gpu.count label
+// with a positive value, indicating it is a GPU node regardless of
+// current GPU health.
+func HasGPU(node *corev1.Node) bool {
+	n, ok := expectedGPUCount(node)
+	return ok && n > 0
+}
+
 // expectedGPUCount reads the nvidia.com/gpu.count label from the node.
 func expectedGPUCount(node *corev1.Node) (int, bool) {
 	v, exists := node.Labels[gpuCountLabel]
