@@ -187,6 +187,7 @@ func (w *watcher) run(ctx context.Context) error {
 		w.states.UpdateCheckerInfo(nodeName, failedCheckers, isGPUNode)
 
 		switch state.Phase() {
+		// Healthy → Unhealthy: health check failed for the first time, start tracking.
 		case PhaseHealthy:
 			w.states.MarkUnhealthy(nodeName, now)
 			slog.Info("Node unhealthy detected",
@@ -196,6 +197,7 @@ func (w *watcher) run(ctx context.Context) error {
 			metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseHealthy.String()).Set(0)
 			metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseUnhealthy.String()).Set(1)
 
+		// Unhealthy → WaitingReboot: health check still failing and threshold exceeded, issue reboot.
 		case PhaseUnhealthy:
 			metrics.NodeUnhealthyDurationSeconds.WithLabelValues(nodeName).Set(
 				now.Sub(state.UnhealthySince()).Seconds())
@@ -218,6 +220,7 @@ func (w *watcher) run(ctx context.Context) error {
 			metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseWaitingReboot.String()).Set(1)
 			w.states.MarkWaitingReboot(nodeName, now)
 
+		// WaitingReboot: health check still failing after reboot, retry after wait window.
 		case PhaseWaitingReboot:
 			metrics.NodeUnhealthyDurationSeconds.WithLabelValues(nodeName).Set(
 				now.Sub(state.UnhealthySince()).Seconds())
