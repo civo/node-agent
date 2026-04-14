@@ -17,6 +17,7 @@ type Option func(*watcher)
 
 var defaultOptions = []Option{
 	WithMonitorOnly("true"),
+	WithExecutor(operation.NewNopExecutor()),
 	WithRebootWaitMinutes("10"),
 	WithGPURebootWaitMinutes("40"),
 }
@@ -98,7 +99,9 @@ func WithCheckers(checkers []health.HealthChecker) Option {
 // WithExecutor returns Option to set the recovery executor.
 func WithExecutor(exec operation.Executor) Option {
 	return func(w *watcher) {
-		w.executor = exec
+		if exec != nil {
+			w.executor = exec
+		}
 	}
 }
 
