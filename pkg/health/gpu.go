@@ -1,7 +1,6 @@
 package health
 
 import (
-	"fmt"
 	"strconv"
 	"time"
 
@@ -25,23 +24,23 @@ func (c *gpuChecker) Threshold() time.Duration { return gpuThreshold }
 func (c *gpuChecker) Check(node *corev1.Node) (bool, string) {
 	expected, ok := expectedGPUCount(node)
 	if !ok || expected == 0 {
-		return true, "Non-GPU node"
+		return true, "NonGPUNode"
 	}
 
 	quantity, exists := node.Status.Allocatable[gpuResourceName]
 	if !exists || quantity.IsZero() {
-		return false, fmt.Sprintf("Expected %d but got 0", expected)
+		return false, "GPUCountMismatch"
 	}
 
 	actual, ok := quantity.AsInt64()
 	if !ok {
-		return false, "No allocatable GPU count"
+		return false, "NoAllocatableGPU"
 	}
 
 	if actual == int64(expected) {
-		return true, fmt.Sprintf("%d/%d", actual, expected)
+		return true, "GPUCountMatch"
 	}
-	return false, fmt.Sprintf("Expected %d but got %d", expected, actual)
+	return false, "GPUCountMismatch"
 }
 
 // HasGPU returns true if the node has the nvidia.com/gpu.count label
