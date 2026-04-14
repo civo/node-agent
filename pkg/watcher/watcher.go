@@ -168,8 +168,7 @@ func (w *watcher) run(ctx context.Context) error {
 
 		// All checkers pass → node is healthy.
 		if len(failedCheckers) == 0 {
-			if state.Phase() != PhaseHealthy {
-				prevPhase := state.Phase()
+			if prevPhase := state.Phase(); prevPhase != PhaseHealthy {
 				slog.Info("Node recovered",
 					"node", nodeName,
 					"previousPhase", prevPhase.String())
