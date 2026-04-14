@@ -6,11 +6,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+const diskPressureThreshold = 30 * time.Minute
+
 // diskPressureChecker reports healthy when the node does not have disk pressure.
 type diskPressureChecker struct{}
 
 func (c *diskPressureChecker) Name() string             { return "DiskPressure" }
-func (c *diskPressureChecker) Threshold() time.Duration { return 30 * time.Minute }
+func (c *diskPressureChecker) Threshold() time.Duration { return diskPressureThreshold }
 
 func (c *diskPressureChecker) Check(node *corev1.Node) (bool, string) {
 	for _, cond := range node.Status.Conditions {

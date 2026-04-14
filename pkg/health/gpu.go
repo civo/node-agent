@@ -11,6 +11,7 @@ import (
 const (
 	gpuResourceName = "nvidia.com/gpu"
 	gpuCountLabel   = "nvidia.com/gpu.count"
+	gpuThreshold    = 10 * time.Minute
 )
 
 // gpuChecker reports healthy when the node's allocatable GPU count
@@ -19,7 +20,7 @@ const (
 type gpuChecker struct{}
 
 func (c *gpuChecker) Name() string             { return "GPU" }
-func (c *gpuChecker) Threshold() time.Duration { return 10 * time.Minute }
+func (c *gpuChecker) Threshold() time.Duration { return gpuThreshold }
 
 func (c *gpuChecker) Check(node *corev1.Node) (bool, string) {
 	expected, ok := expectedGPUCount(node)

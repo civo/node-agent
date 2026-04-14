@@ -6,7 +6,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-const ciliumReadyReason = "CiliumIsUp"
+const (
+	ciliumReadyReason = "CiliumIsUp"
+	ciliumThreshold   = 10 * time.Minute
+)
 
 // ciliumChecker reports healthy when the Cilium-managed NetworkUnavailable
 // condition is False. If the condition's reason is not "CiliumIsUp"
@@ -14,7 +17,7 @@ const ciliumReadyReason = "CiliumIsUp"
 type ciliumChecker struct{}
 
 func (c *ciliumChecker) Name() string             { return "CiliumAgent" }
-func (c *ciliumChecker) Threshold() time.Duration { return 10 * time.Minute }
+func (c *ciliumChecker) Threshold() time.Duration { return ciliumThreshold }
 
 func (c *ciliumChecker) Check(node *corev1.Node) (bool, string) {
 	for _, cond := range node.Status.Conditions {
