@@ -207,6 +207,11 @@ func (w *watcher) run(ctx context.Context) error {
 			metrics.NodeUnhealthyDurationSeconds.WithLabelValues(nodeName).Set(
 				now.Sub(state.UnhealthySince()).Seconds())
 			if now.Sub(state.UnhealthySince()) < minThreshold {
+				slog.Info("Waiting for unhealthy threshold",
+					"node", nodeName,
+					"elapsed", now.Sub(state.UnhealthySince()).String(),
+					"threshold", minThreshold.String(),
+					"failedCheckers", failedCheckers)
 				continue
 			}
 			if !w.monitorOnly {
@@ -234,6 +239,12 @@ func (w *watcher) run(ctx context.Context) error {
 				rebootWait = w.gpuRebootWaitMinutes
 			}
 			if now.Sub(state.LastRebootTime()) < rebootWait*time.Minute {
+				slog.Info("Waiting for reboot effect",
+					"node", nodeName,
+					"elapsed", now.Sub(state.LastRebootTime()).String(),
+					"rebootWait", (rebootWait * time.Minute).String(),
+					"rebootCount", state.RebootCount(),
+					"isGPUNode", state.IsGPUNode())
 				continue
 			}
 
