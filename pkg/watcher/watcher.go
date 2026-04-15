@@ -99,9 +99,12 @@ func (w *watcher) setupInformer(ctx context.Context) error {
 	var informerOpts []informers.SharedInformerOption
 	if w.nodeLabelSelector != nil {
 		labelSelector := metav1.FormatLabelSelector(w.nodeLabelSelector)
+		slog.Info("Using node label selector", "selector", labelSelector)
 		informerOpts = append(informerOpts, informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
 			opts.LabelSelector = labelSelector
 		}))
+	} else {
+		slog.Info("No node label selector configured, watching all nodes")
 	}
 	factory := informers.NewSharedInformerFactoryWithOptions(w.client, 0, informerOpts...)
 
