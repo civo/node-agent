@@ -96,13 +96,14 @@ func (w *watcher) setupInformer(ctx context.Context) error {
 		return nil
 	}
 
-	factory := informers.NewSharedInformerFactoryWithOptions(
-		w.client,
-		0,
-		informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
-			opts.LabelSelector = metav1.FormatLabelSelector(w.nodeLabelSelector)
-		}),
-	)
+	var informerOpts []informers.SharedInformerOption
+	if w.nodeLabelSelector != nil {
+		labelSelector := metav1.FormatLabelSelector(w.nodeLabelSelector)
+		informerOpts = append(informerOpts, informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
+			opts.LabelSelector = labelSelector
+		}))
+	}
+	factory := informers.NewSharedInformerFactoryWithOptions(w.client, 0, informerOpts...)
 
 	nodeInformer := factory.Core().V1().Nodes()
 	w.nodeLister = nodeInformer.Lister()
