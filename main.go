@@ -53,6 +53,7 @@ func run(ctx context.Context) error {
 	checkers := health.NewDefaultCheckers()
 
 	metrics.Register()
+	metrics.Info.WithLabelValues(version, clusterID).Set(1)
 	metricsServer := &http.Server{
 		Addr:    ":" + metricsPortValue(metricsPort),
 		Handler: metrics.Handler(),

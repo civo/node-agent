@@ -57,6 +57,16 @@ var (
 		},
 		[]string{"node", "phase"},
 	)
+
+	// Info exposes build and cluster identity as a constant gauge (value is always 1).
+	// Use PromQL joins (group_left) to enrich other metrics with version/cluster_id.
+	Info = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "civo_node_agent_info",
+			Help: "Build and cluster identity for the node-agent.",
+		},
+		[]string{"version", "cluster_id"},
+	)
 )
 
 // Register registers all node-agent metrics with the default Prometheus registerer.
@@ -67,6 +77,7 @@ func Register() {
 		RecoveryFailuresTotal,
 		NodeUnhealthyDurationSeconds,
 		RecoveryPhase,
+		Info,
 	)
 }
 
