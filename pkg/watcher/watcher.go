@@ -145,6 +145,7 @@ func (w *watcher) Run(ctx context.Context) error {
 func (w *watcher) run(ctx context.Context) error {
 	nodes, err := w.nodeLister.List(labels.Everything())
 	if err != nil {
+		metrics.ReconcileErrorsTotal.WithLabelValues("list_nodes").Inc()
 		return err
 	}
 

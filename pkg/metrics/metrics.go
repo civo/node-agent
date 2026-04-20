@@ -38,6 +38,16 @@ var (
 		[]string{"node", "action"},
 	)
 
+	// ReconcileErrorsTotal counts errors encountered during the reconcile loop,
+	// labeled by reason (e.g. "list_nodes").
+	ReconcileErrorsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "civo_node_agent_reconcile_errors_total",
+			Help: "Total number of errors encountered during the reconcile loop.",
+		},
+		[]string{"reason"},
+	)
+
 	// NodeUnhealthyDurationSeconds tracks how long each node has been
 	// continuously unhealthy, in seconds.
 	NodeUnhealthyDurationSeconds = prometheus.NewGaugeVec(
@@ -75,6 +85,7 @@ func Register() {
 		HealthCheckTotal,
 		RecoveryActionsTotal,
 		RecoveryFailuresTotal,
+		ReconcileErrorsTotal,
 		NodeUnhealthyDurationSeconds,
 		RecoveryPhase,
 		Info,
