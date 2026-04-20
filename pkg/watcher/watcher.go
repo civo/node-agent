@@ -129,10 +129,10 @@ func (w *watcher) Run(ctx context.Context) error {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
+	slog.Info("Watcher reconcile loop started")
 	for {
 		select {
 		case <-ticker.C:
-			slog.Info("Started the watcher process...")
 			if err := w.run(ctx); err != nil {
 				slog.Error("An error occurred while running the watcher process", "error", err)
 			}
