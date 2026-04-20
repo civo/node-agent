@@ -40,7 +40,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: civo-api-access
-                  key: civo-api-key
+                  key: api-key
             - name: CIVO_API_URL
               valueFrom:
                 secretKeyRef:
