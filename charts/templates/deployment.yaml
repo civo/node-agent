@@ -39,7 +39,7 @@ spec:
             - name: CIVO_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: civo-node-agent
+                  name: civo-api-access
                   key: civo-api-key
             - name: CIVO_API_URL
               valueFrom:
@@ -56,10 +56,8 @@ spec:
                 secretKeyRef:
                   name: civo-api-access
                   key: region
-            {{- with .Values.nodePoolIDs }}
             - name: CIVO_NODE_POOL_ID
-              value: {{ . | quote }}
-            {{- end }}
+              value: {{ .Values.nodePoolIDs | quote }}
             - name: CIVO_NODE_REBOOT_WAIT_MINUTES
               value: {{ .Values.rebootWaitMinutes | quote }}
             - name: CIVO_GPU_NODE_REBOOT_WAIT_MINUTES
