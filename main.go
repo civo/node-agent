@@ -30,7 +30,7 @@ var (
 	apiKey               = strings.TrimSpace(os.Getenv("CIVO_API_KEY"))
 	region               = strings.TrimSpace(os.Getenv("CIVO_REGION"))
 	clusterID            = strings.TrimSpace(os.Getenv("CIVO_CLUSTER_ID"))
-	nodePoolID           = strings.TrimSpace(os.Getenv("CIVO_NODE_POOL_ID"))
+	nodePoolIDs          = strings.TrimSpace(os.Getenv("CIVO_NODE_POOL_IDS"))
 	rebootWaitMinutes    = strings.TrimSpace(os.Getenv("CIVO_NODE_REBOOT_WAIT_MINUTES"))
 	gpuRebootWaitMinutes = strings.TrimSpace(os.Getenv("CIVO_GPU_NODE_REBOOT_WAIT_MINUTES"))
 	monitorOnly          = strings.TrimSpace(os.Getenv("CIVO_NODE_AGENT_MONITOR_ONLY"))
@@ -72,7 +72,7 @@ func run(ctx context.Context) error {
 	}()
 
 	w, err := watcher.NewWatcher(ctx,
-		watcher.WithNodePoolIDs(nodePoolID),
+		watcher.WithNodePoolIDs(nodePoolIDs),
 		watcher.WithKubernetesClientConfigPath(*kubeconfigPath),
 		watcher.WithExecutor(executor),
 		watcher.WithCheckers(checkers),
@@ -96,7 +96,7 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil).WithAttrs([]slog.Attr{
 		slog.String("clusterID", clusterID),
 		slog.String("region", region),
-		slog.String("nodePoolID", nodePoolID),
+		slog.String("nodePoolIDs", nodePoolIDs),
 	})))
 
 	if err := run(context.Background()); err != nil {

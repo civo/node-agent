@@ -56,7 +56,7 @@ spec:
                 secretKeyRef:
                   name: civo-api-access
                   key: region
-            - name: CIVO_NODE_POOL_ID
+            - name: CIVO_NODE_POOL_IDS
               value: {{ .Values.nodePoolIDs | quote }}
             - name: CIVO_NODE_REBOOT_WAIT_MINUTES
               value: {{ .Values.rebootWaitMinutes | quote }}
