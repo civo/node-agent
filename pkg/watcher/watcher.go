@@ -217,6 +217,7 @@ func (w *watcher) run(ctx context.Context) error {
 			if !w.monitorOnly {
 				if err := w.executor.Reboot(ctx, nodeName); err != nil {
 					slog.Error("Failed to reboot node", "node", nodeName, "error", err)
+					metrics.RecoveryFailuresTotal.WithLabelValues(nodeName, "reboot").Inc()
 					continue
 				}
 			}
@@ -256,6 +257,7 @@ func (w *watcher) run(ctx context.Context) error {
 			if !w.monitorOnly {
 				if err := w.executor.Reboot(ctx, nodeName); err != nil {
 					slog.Error("Failed to reboot node (retry)", "node", nodeName, "error", err)
+					metrics.RecoveryFailuresTotal.WithLabelValues(nodeName, "reboot").Inc()
 					continue
 				}
 			}
@@ -276,6 +278,7 @@ func (w *watcher) run(ctx context.Context) error {
 			metrics.NodeUnhealthyDurationSeconds.DeleteLabelValues(name)
 			metrics.HealthCheckTotal.DeletePartialMatch(prometheus.Labels{"node": name})
 			metrics.RecoveryActionsTotal.DeletePartialMatch(prometheus.Labels{"node": name})
+			metrics.RecoveryFailuresTotal.DeletePartialMatch(prometheus.Labels{"node": name})
 			metrics.RecoveryPhase.DeletePartialMatch(prometheus.Labels{"node": name})
 		}
 		return true

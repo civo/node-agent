@@ -28,6 +28,16 @@ var (
 		[]string{"node", "action", "mode"},
 	)
 
+	// RecoveryFailuresTotal counts the number of recovery actions that failed
+	// (e.g. Civo API errors).
+	RecoveryFailuresTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "civo_node_agent_recovery_failures_total",
+			Help: "Total number of recovery actions that failed.",
+		},
+		[]string{"node", "action"},
+	)
+
 	// NodeUnhealthyDurationSeconds tracks how long each node has been
 	// continuously unhealthy, in seconds.
 	NodeUnhealthyDurationSeconds = prometheus.NewGaugeVec(
@@ -54,6 +64,7 @@ func Register() {
 	prometheus.MustRegister(
 		HealthCheckTotal,
 		RecoveryActionsTotal,
+		RecoveryFailuresTotal,
 		NodeUnhealthyDurationSeconds,
 		RecoveryPhase,
 	)
