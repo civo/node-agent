@@ -12,7 +12,7 @@ var (
 	// checker, and result (pass/fail).
 	HealthCheckTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "node_agent_health_check_total",
+			Name: "civo_node_agent_health_check_total",
 			Help: "Total number of health check executions.",
 		},
 		[]string{"node", "checker", "result"},
@@ -22,7 +22,7 @@ var (
 	// per node, action type (reboot), and mode (report/active).
 	RecoveryActionsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "node_agent_recovery_actions_total",
+			Name: "civo_node_agent_recovery_actions_total",
 			Help: "Total number of recovery actions performed.",
 		},
 		[]string{"node", "action", "mode"},
@@ -32,7 +32,7 @@ var (
 	// continuously unhealthy, in seconds.
 	NodeUnhealthyDurationSeconds = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "node_agent_node_unhealthy_duration_seconds",
+			Name: "civo_node_agent_node_unhealthy_duration_seconds",
 			Help: "Duration in seconds a node has been continuously unhealthy.",
 		},
 		[]string{"node"},
@@ -42,7 +42,7 @@ var (
 	// The value is the numeric NodePhase (0=Healthy, 1=Unhealthy, etc.).
 	RecoveryPhase = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "node_agent_recovery_phase",
+			Name: "civo_node_agent_recovery_phase",
 			Help: "Current recovery phase of a node.",
 		},
 		[]string{"node", "phase"},
