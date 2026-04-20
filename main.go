@@ -54,6 +54,7 @@ func run(ctx context.Context) error {
 
 	metrics.Register()
 	metrics.Info.WithLabelValues(version, clusterID).Set(1)
+	defer metrics.Info.DeleteLabelValues(version, clusterID)
 	metricsServer := &http.Server{
 		Addr:    ":" + metricsPortValue(metricsPort),
 		Handler: metrics.Handler(),
