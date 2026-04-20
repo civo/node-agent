@@ -20,7 +20,7 @@ import (
 )
 
 var (
-	version        = "0.0.1"
+	version        = "0.2.0"
 	versionInfo    = flag.Bool("version", false, "Print the driver version")
 	kubeconfigPath = flag.String("kubeconfig", "/etc/rancher/k3s/k3s.yaml", "Path to kubeconfig file (empty for in-cluster config)")
 )
