@@ -10,7 +10,7 @@ The `civo-api-access` secret is automatically provisioned by Civo in the `kube-s
 
 | Key | Description |
 |-----|-------------|
-| `civo-api-key` | Civo API key used for reboot operations. |
+| `api-key`  | Civo API key used for reboot operations. |
 | `api-url` | Civo API URL. |
 | `cluster-id` | The ID of this Civo Kubernetes cluster. |
 | `region` | The Civo region this cluster runs in. |
