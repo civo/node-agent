@@ -17,29 +17,11 @@ The `civo-api-access` secret is automatically provisioned by Civo in the `kube-s
 
 No manual setup is required — `node-agent` reads these values directly from the existing secret.
 
-## Nvidia Device Plugin Install
+## NVIDIA GPU Operator (GPU clusters only)
 
-```bash
-kubectl create ns gpu-operator
-kubectl label namespace gpu-operator pod-security.kubernetes.io/enforce=privileged
-kubectl label namespace gpu-operator pod-security.kubernetes.io/warn=privileged
-kubectl label namespace gpu-operator pod-security.kubernetes.io/audit=privileged
-```
+The GPU health check relies on the `nvidia.com/gpu.count` label added by the NVIDIA GPU Feature Discovery component. Follow the Civo documentation to install the NVIDIA GPU Operator on your cluster:
 
-```bash
-helm repo add nvdp https://nvidia.github.io/k8s-device-plugin \
-&& helm repo update
-```
-
-```bash
-helm install --namespace gpu-operator nvidia-device-plugin nvdp/nvidia-device-plugin --create-namespace \
-        --version=0.17.0 \
-        --set gfd.enabled=true \
-        --set devicePlugin.enabled=true \
-        --set dcgm.enabled=true \
-        --set nfd.enableNodeFeatureApi=true \
-        --wait
-```
+[Installing the NVIDIA GPU Operator](https://github.com/civo/docs/blob/main/content/docs/kubernetes/advanced/gpu-config.md#installing-the-nvidia-gpu-operator)
 
 ## Install `node-agent` chart
 
