@@ -45,7 +45,7 @@ type watcher struct {
 	nowFunc     func() time.Time
 }
 
-func NewWatcher(ctx context.Context, opts ...Option) (Watcher, error) {
+func NewWatcher(opts ...Option) (Watcher, error) {
 	w := &watcher{
 		monitorOnly: true,
 		states:      NewStateStore(),
@@ -175,13 +175,13 @@ func (w *watcher) run(ctx context.Context) error {
 
 		// All checkers pass → node is healthy.
 		if len(failedCheckers) == 0 {
+			metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseHealthy.String()).Set(1)
 			if prevPhase := state.Phase(); prevPhase != PhaseHealthy {
 				slog.Info("Node recovered",
 					"node", nodeName,
 					"previousPhase", prevPhase.String())
 				metrics.NodeUnhealthyDurationSeconds.WithLabelValues(nodeName).Set(0)
 				metrics.RecoveryPhase.WithLabelValues(nodeName, prevPhase.String()).Set(0)
-				metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseHealthy.String()).Set(1)
 				w.states.Reset(nodeName)
 			}
 			continue
@@ -249,7 +249,7 @@ func (w *watcher) run(ctx context.Context) error {
 					slog.Info("Waiting for reboot effect",
 						"node", nodeName,
 						"elapsed", now.Sub(state.LastRebootTime()).String(),
-						"rebootWait", (rebootWait * time.Minute).String(),
+						"rebootWait", rebootWait.String(),
 						"rebootCount", state.RebootCount(),
 						"isGPUNode", state.IsGPUNode())
 				}
@@ -280,14 +280,14 @@ func (w *watcher) run(ctx context.Context) error {
 					continue
 				}
 			}
+			w.states.MarkWaitingReboot(nodeName, now, !w.monitorOnly)
 			mode := modeLabel(w.monitorOnly)
 			slog.Info("Reboot retry",
 				"node", nodeName,
 				"mode", mode,
-				"rebootCount", state.RebootCount()+1,
+				"rebootCount", state.RebootCount(),
 				"failedCheckers", failedCheckers)
 			metrics.RecoveryActionsTotal.WithLabelValues(nodeName, "reboot", mode).Inc()
-			w.states.MarkWaitingReboot(nodeName, now, !w.monitorOnly)
 
 		// Failed: recovery attempts exhausted. Wait for natural recovery (all checkers pass).
 		// If the node recovers the "all checkers pass" branch above will Reset it back to Healthy.

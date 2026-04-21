@@ -46,6 +46,7 @@ func (p NodePhase) String() string {
 // NodeState holds the recovery state for a single node.
 // All fields are private; read via getters, mutate via StateStore methods.
 type NodeState struct {
+	mu             sync.RWMutex
 	phase          NodePhase
 	unhealthySince time.Time
 	lastRebootTime time.Time
@@ -54,11 +55,31 @@ type NodeState struct {
 	isGPUNode      bool
 }
 
-func (s *NodeState) Phase() NodePhase          { return s.phase }
-func (s *NodeState) UnhealthySince() time.Time { return s.unhealthySince }
-func (s *NodeState) LastRebootTime() time.Time { return s.lastRebootTime }
-func (s *NodeState) RebootCount() int          { return s.rebootCount }
-func (s *NodeState) IsGPUNode() bool           { return s.isGPUNode }
+func (s *NodeState) Phase() NodePhase {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.phase
+}
+func (s *NodeState) UnhealthySince() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.unhealthySince
+}
+func (s *NodeState) LastRebootTime() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.lastRebootTime
+}
+func (s *NodeState) RebootCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.rebootCount
+}
+func (s *NodeState) IsGPUNode() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.isGPUNode
+}
 
 // StateStore is a concurrency-safe store for per-node recovery state.
 type StateStore struct {
@@ -78,7 +99,6 @@ func NewStateStore() *StateStore {
 func (s *StateStore) GetOrCreate(name string) *NodeState {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	if st, ok := s.nodes[name]; ok {
 		return st
 	}
@@ -105,9 +125,12 @@ func (s *StateStore) Delete(name string) {
 // Range calls fn for each node state entry. If fn returns false, iteration stops.
 func (s *StateStore) Range(fn func(name string, state *NodeState) bool) {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-
+	snapshot := make(map[string]*NodeState, len(s.nodes))
 	for name, state := range s.nodes {
+		snapshot[name] = state
+	}
+	s.mu.RUnlock()
+	for name, state := range snapshot {
 		if !fn(name, state) {
 			return
 		}
@@ -116,65 +139,60 @@ func (s *StateStore) Range(fn func(name string, state *NodeState) bool) {
 
 // UpdateCheckerInfo updates the failed checker names and GPU flag for a node.
 func (s *StateStore) UpdateCheckerInfo(name string, failedCheckers []string, isGPUNode bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	st, ok := s.nodes[name]
+	st, ok := s.Get(name)
 	if !ok {
 		return
 	}
+	st.mu.Lock()
 	st.failedCheckers = failedCheckers
 	st.isGPUNode = isGPUNode
+	st.mu.Unlock()
 }
 
 // MarkUnhealthy transitions a node to PhaseUnhealthy and records when it became unhealthy.
 func (s *StateStore) MarkUnhealthy(name string, now time.Time) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	st, ok := s.nodes[name]
+	st, ok := s.Get(name)
 	if !ok {
 		return
 	}
+	st.mu.Lock()
 	st.phase = PhaseUnhealthy
 	st.unhealthySince = now
+	st.mu.Unlock()
 }
 
 // MarkWaitingReboot transitions a node to PhaseWaitingReboot and records the reboot time.
 // When countReboot is true, the reboot counter is incremented. Pass false in monitor-only
 // mode where no actual reboot was issued.
 func (s *StateStore) MarkWaitingReboot(name string, now time.Time, countReboot bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	st, ok := s.nodes[name]
+	st, ok := s.Get(name)
 	if !ok {
 		return
 	}
+	st.mu.Lock()
 	st.phase = PhaseWaitingReboot
 	st.lastRebootTime = now
 	if countReboot {
 		st.rebootCount++
 	}
+	st.mu.Unlock()
 }
 
 // MarkFailed transitions a node to PhaseFailed after recovery attempts were exhausted.
 func (s *StateStore) MarkFailed(name string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	st, ok := s.nodes[name]
+	st, ok := s.Get(name)
 	if !ok {
 		return
 	}
+	st.mu.Lock()
 	st.phase = PhaseFailed
+	st.mu.Unlock()
 }
 
 // Reset replaces the node's state with a fresh PhaseHealthy entry.
 func (s *StateStore) Reset(name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	if _, ok := s.nodes[name]; ok {
 		s.nodes[name] = &NodeState{phase: PhaseHealthy}
 	}
@@ -184,7 +202,6 @@ func (s *StateStore) Reset(name string) {
 func (s *StateStore) Cleanup(activeNodes map[string]struct{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	for name := range s.nodes {
 		if _, ok := activeNodes[name]; !ok {
 			delete(s.nodes, name)

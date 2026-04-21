@@ -101,8 +101,7 @@ func newTestWatcher(t *testing.T, opts ...Option) *watcher {
 		WithKubernetesClient(fake.NewSimpleClientset()),
 		WithExecutor(&mockExecutor{}),
 	}
-	w, err := NewWatcher(t.Context(),
-		append(baseOpts, opts...)...)
+	w, err := NewWatcher(append(baseOpts, opts...)...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,8 +174,7 @@ func TestNew(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			w, err := NewWatcher(t.Context(),
-				test.args.opts...)
+			w, err := NewWatcher(test.args.opts...)
 			if (err != nil) != test.wantErr {
 				t.Errorf("error = %v, wantErr %v", err, test.wantErr)
 			}
