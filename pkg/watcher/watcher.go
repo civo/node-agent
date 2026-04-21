@@ -241,12 +241,17 @@ func (w *watcher) run(ctx context.Context) error {
 				rebootWait = w.gpuRebootWaitMinutes
 			}
 			if now.Sub(state.LastRebootTime()) < rebootWait*time.Minute {
-				slog.Info("Waiting for reboot effect",
-					"node", nodeName,
-					"elapsed", now.Sub(state.LastRebootTime()).String(),
-					"rebootWait", (rebootWait * time.Minute).String(),
-					"rebootCount", state.RebootCount(),
-					"isGPUNode", state.IsGPUNode())
+				// In monitor-only mode no reboot actually happened, so logging
+				// "waiting for reboot effect" every tick would be misleading and noisy.
+				// The "Reboot retry" log still fires once per rebootWait cycle as a liveness signal.
+				if !w.monitorOnly {
+					slog.Info("Waiting for reboot effect",
+						"node", nodeName,
+						"elapsed", now.Sub(state.LastRebootTime()).String(),
+						"rebootWait", (rebootWait * time.Minute).String(),
+						"rebootCount", state.RebootCount(),
+						"isGPUNode", state.IsGPUNode())
+				}
 				continue
 			}
 
