@@ -13,7 +13,6 @@ func TestNodePhaseString(t *testing.T) {
 		{PhaseUnknown, "Unknown"},
 		{PhaseHealthy, "Healthy"},
 		{PhaseUnhealthy, "Unhealthy"},
-		{PhaseReboot, "Reboot"},
 		{PhaseWaitingReboot, "WaitingReboot"},
 		{PhaseDrain, "Drain"},
 		{PhaseReplace, "Replace"},

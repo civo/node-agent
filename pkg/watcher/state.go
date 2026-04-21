@@ -12,11 +12,10 @@ const (
 	PhaseUnknown       NodePhase = iota // 0 - unknown/uninitialized
 	PhaseHealthy                        // 1 - node is healthy
 	PhaseUnhealthy                      // 2 - checker(s) failing, waiting for threshold
-	PhaseReboot                         // 3 - reboot command issued
-	PhaseWaitingReboot                  // 4 - waiting for reboot to take effect
-	PhaseDrain                          // 5 - future: draining pods
-	PhaseReplace                        // 6 - future: replace issued
-	PhaseFailed                         // 7 - recovery gave up (exceeded retries); awaits manual intervention or natural recovery
+	PhaseWaitingReboot                  // 3 - waiting for reboot to take effect
+	PhaseDrain                          // 4 - future: draining pods
+	PhaseReplace                        // 5 - future: replace issued
+	PhaseFailed                         // 6 - recovery gave up (exceeded retries); awaits manual intervention or natural recovery
 )
 
 // String returns the string representation of a NodePhase.
@@ -28,8 +27,6 @@ func (p NodePhase) String() string {
 		return "Healthy"
 	case PhaseUnhealthy:
 		return "Unhealthy"
-	case PhaseReboot:
-		return "Reboot"
 	case PhaseWaitingReboot:
 		return "WaitingReboot"
 	case PhaseDrain:
