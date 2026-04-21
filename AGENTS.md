@@ -16,7 +16,7 @@ By default the agent runs in **monitor-only mode** (logs recovery actions withou
 
 ```bash
 # Build (CGO disabled — no C dependencies; required for static binary on the CP VM)
-CGO_ENABLED=0 go build -o civo-node-agent ./
+CGO_ENABLED=0 go build -o node-agent ./
 
 # Run all tests
 go test ./...
