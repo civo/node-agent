@@ -242,7 +242,7 @@ func (w *watcher) run(ctx context.Context) error {
 			}
 			if now.Sub(state.LastRebootTime()) < rebootWait*time.Minute {
 				// In monitor-only mode no reboot actually happened, so logging
-				// "waiting for reboot effect" every tick would be misleading and noisy.
+				// "waiting for reboot effect" every tick would be noisy.
 				// The "Reboot retry" log still fires once per rebootWait cycle as a liveness signal.
 				if !w.monitorOnly {
 					slog.Info("Waiting for reboot effect",
