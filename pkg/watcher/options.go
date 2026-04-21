@@ -85,6 +85,8 @@ func WithMonitorOnly(s string) Option {
 	return func(w *watcher) {
 		if v, err := strconv.ParseBool(s); err == nil {
 			w.monitorOnly = v
+		} else {
+			slog.Info("MonitorOnly is invalid", "value", s)
 		}
 	}
 }
