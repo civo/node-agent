@@ -17,6 +17,7 @@ func TestNodePhaseString(t *testing.T) {
 		{PhaseWaitingReboot, "WaitingReboot"},
 		{PhaseDrain, "Drain"},
 		{PhaseReplace, "Replace"},
+		{PhaseFailed, "Failed"},
 		{NodePhase(99), "Unknown"},
 	}
 
@@ -180,6 +181,25 @@ func TestStateStoreMarkWaitingRebootNonexistent(t *testing.T) {
 	s := NewStateStore()
 	// Should not panic.
 	s.MarkWaitingReboot("nonexistent", time.Now(), true)
+}
+
+func TestStateStoreMarkFailed(t *testing.T) {
+	s := NewStateStore()
+	s.GetOrCreate("node-01")
+	s.MarkWaitingReboot("node-01", time.Now(), true)
+
+	s.MarkFailed("node-01")
+
+	st, _ := s.Get("node-01")
+	if st.Phase() != PhaseFailed {
+		t.Errorf("got phase %v, want PhaseFailed", st.Phase())
+	}
+}
+
+func TestStateStoreMarkFailedNonexistent(t *testing.T) {
+	s := NewStateStore()
+	// Should not panic.
+	s.MarkFailed("nonexistent")
 }
 
 func TestStateStoreUpdateCheckerInfo(t *testing.T) {

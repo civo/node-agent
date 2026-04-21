@@ -529,6 +529,139 @@ func TestRun_UnhealthyWithinThresholdNoReboot(t *testing.T) {
 	}
 }
 
+func TestRun_RebootRetryLimitExceeded_TransitionsToFailed(t *testing.T) {
+	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
+	node := newTestNode("node-01", corev1.ConditionFalse, 0)
+	exec := &mockExecutor{}
+	w := newTestWatcher(t,
+		withNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		WithCheckers(health.NewDefaultCheckers()),
+		WithExecutor(exec),
+		WithMonitorOnly("false"),
+		WithRebootWaitMinutes("10"),
+		WithMaxRebootRetries("3"),
+		withNowFunc(func() time.Time { return now }),
+	)
+
+	// Run 1: detect unhealthy.
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	// Run 2: threshold exceeded → first reboot (rebootCount=1).
+	now = now.Add(6 * time.Minute)
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	// Reboot retries 2 and 3.
+	for i := 0; i < 2; i++ {
+		now = now.Add(11 * time.Minute)
+		if err := w.run(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	state, _ := w.states.Get("node-01")
+	if state.RebootCount() != 3 {
+		t.Fatalf("expected rebootCount=3 after 3 reboots, got %d", state.RebootCount())
+	}
+	if state.Phase() != PhaseWaitingReboot {
+		t.Fatalf("expected PhaseWaitingReboot after %d reboots, got %v", state.RebootCount(), state.Phase())
+	}
+
+	// Next retry should exceed the limit → PhaseFailed.
+	now = now.Add(11 * time.Minute)
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	state, _ = w.states.Get("node-01")
+	if state.Phase() != PhaseFailed {
+		t.Errorf("got phase %v, want PhaseFailed", state.Phase())
+	}
+	if len(exec.calls) != 3 {
+		t.Errorf("expected exactly 3 reboot calls (no further reboots after Failed), got %d", len(exec.calls))
+	}
+}
+
+func TestRun_MonitorOnlyDoesNotIncrementRebootCount(t *testing.T) {
+	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
+	node := newTestNode("node-01", corev1.ConditionFalse, 0)
+	w := newTestWatcher(t,
+		withNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		WithCheckers(health.NewDefaultCheckers()),
+		WithMonitorOnly("true"),
+		WithRebootWaitMinutes("10"),
+		WithMaxRebootRetries("3"),
+		withNowFunc(func() time.Time { return now }),
+	)
+
+	// Run the state machine through several reboot cycles.
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 5; i++ {
+		now = now.Add(11 * time.Minute)
+		if err := w.run(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	state, _ := w.states.Get("node-01")
+	if state.RebootCount() != 0 {
+		t.Errorf("rebootCount should stay 0 in monitor-only mode, got %d", state.RebootCount())
+	}
+	if state.Phase() == PhaseFailed {
+		t.Errorf("monitor-only mode must not transition to PhaseFailed; got phase %v", state.Phase())
+	}
+}
+
+func TestRun_RecoverFromFailed(t *testing.T) {
+	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
+	node := newTestNode("node-01", corev1.ConditionFalse, 0)
+	exec := &mockExecutor{}
+	w := newTestWatcher(t,
+		withNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		WithCheckers(health.NewDefaultCheckers()),
+		WithExecutor(exec),
+		WithMonitorOnly("false"),
+		WithRebootWaitMinutes("10"),
+		WithMaxRebootRetries("1"),
+		withNowFunc(func() time.Time { return now }),
+	)
+
+	// Drive to Failed: detect → first reboot (rebootCount=1) → retry exceeds limit.
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(6 * time.Minute)
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(11 * time.Minute)
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	if st, _ := w.states.Get("node-01"); st.Phase() != PhaseFailed {
+		t.Fatalf("expected PhaseFailed, got %v", st.Phase())
+	}
+
+	// Node recovers.
+	node.Status.Conditions[0].Status = corev1.ConditionTrue
+	now = now.Add(time.Minute)
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	st, _ := w.states.Get("node-01")
+	if st.Phase() != PhaseHealthy {
+		t.Errorf("expected PhaseHealthy after recovery, got %v", st.Phase())
+	}
+	if st.RebootCount() != 0 {
+		t.Errorf("rebootCount should reset to 0 after recovery, got %d", st.RebootCount())
+	}
+}
+
 func TestBuildNodeSelector(t *testing.T) {
 	tests := []struct {
 		description string
