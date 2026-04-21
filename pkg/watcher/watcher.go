@@ -161,14 +161,10 @@ func (w *watcher) run(ctx context.Context) error {
 		var failedCheckers []string
 		var minThreshold time.Duration
 		for _, checker := range w.checkers {
-			healthy, reason := checker.Check(node)
+			healthy, _ := checker.Check(node)
 			result := "pass"
 			if !healthy {
 				result = "fail"
-				slog.Info("Health check failed",
-					"node", nodeName,
-					"checker", checker.Name(),
-					"reason", reason)
 				failedCheckers = append(failedCheckers, checker.Name())
 				if minThreshold == 0 || checker.Threshold() < minThreshold {
 					minThreshold = checker.Threshold()
