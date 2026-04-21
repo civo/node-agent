@@ -161,10 +161,9 @@ func (s *StateStore) MarkUnhealthy(name string, now time.Time) {
 	st.mu.Unlock()
 }
 
-// MarkWaitingReboot transitions a node to PhaseWaitingReboot and records the reboot time.
-// When countReboot is true, the reboot counter is incremented. Pass false in monitor-only
-// mode where no actual reboot was issued.
-func (s *StateStore) MarkWaitingReboot(name string, now time.Time, countReboot bool) {
+// MarkWaitingReboot transitions a node to PhaseWaitingReboot, records the
+// reboot time, and increments the reboot counter.
+func (s *StateStore) MarkWaitingReboot(name string, now time.Time) {
 	st, ok := s.Get(name)
 	if !ok {
 		return
@@ -172,9 +171,7 @@ func (s *StateStore) MarkWaitingReboot(name string, now time.Time, countReboot b
 	st.mu.Lock()
 	st.phase = PhaseWaitingReboot
 	st.lastRebootTime = now
-	if countReboot {
-		st.rebootCount++
-	}
+	st.rebootCount++
 	st.mu.Unlock()
 }
 

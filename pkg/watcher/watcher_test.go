@@ -581,19 +581,21 @@ func TestRun_RebootRetryLimitExceeded_TransitionsToFailed(t *testing.T) {
 	}
 }
 
-func TestRun_MonitorOnlyDoesNotIncrementRebootCount(t *testing.T) {
+func TestRun_MonitorOnlySimulatesFullLifecycle(t *testing.T) {
 	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
 	node := newTestNode("node-01", corev1.ConditionFalse, 0)
+	exec := &mockExecutor{}
 	w := newTestWatcher(t,
 		withNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
 		WithCheckers(health.NewDefaultCheckers()),
+		WithExecutor(exec),
 		WithMonitorOnly("true"),
 		WithRebootWaitMinutes("10"),
 		WithMaxRebootRetries("3"),
 		withNowFunc(func() time.Time { return now }),
 	)
 
-	// Run the state machine through several reboot cycles.
+	// Drive the state machine through detection + three reboot cycles + retry-limit check.
 	if err := w.run(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -605,11 +607,14 @@ func TestRun_MonitorOnlyDoesNotIncrementRebootCount(t *testing.T) {
 	}
 
 	state, _ := w.states.Get("node-01")
-	if state.RebootCount() != 0 {
-		t.Errorf("rebootCount should stay 0 in monitor-only mode, got %d", state.RebootCount())
+	if state.Phase() != PhaseFailed {
+		t.Errorf("expected PhaseFailed after monitor-only simulation, got %v", state.Phase())
 	}
-	if state.Phase() == PhaseFailed {
-		t.Errorf("monitor-only mode must not transition to PhaseFailed; got phase %v", state.Phase())
+	if state.RebootCount() != 3 {
+		t.Errorf("expected rebootCount=3 (maxRebootRetries), got %d", state.RebootCount())
+	}
+	if len(exec.calls) != 0 {
+		t.Errorf("expected no executor calls in monitor-only mode, got %d", len(exec.calls))
 	}
 }
 

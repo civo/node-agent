@@ -144,7 +144,7 @@ func TestStateStoreMarkWaitingReboot(t *testing.T) {
 	s.GetOrCreate("node-01")
 
 	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
-	s.MarkWaitingReboot("node-01", now, true)
+	s.MarkWaitingReboot("node-01", now)
 
 	st, _ := s.Get("node-01")
 	if st.Phase() != PhaseWaitingReboot {
@@ -159,7 +159,7 @@ func TestStateStoreMarkWaitingReboot(t *testing.T) {
 
 	// Retry increments count.
 	later := now.Add(time.Hour)
-	s.MarkWaitingReboot("node-01", later, true)
+	s.MarkWaitingReboot("node-01", later)
 
 	st, _ = s.Get("node-01")
 	if st.RebootCount() != 2 {
@@ -168,25 +168,18 @@ func TestStateStoreMarkWaitingReboot(t *testing.T) {
 	if !st.LastRebootTime().Equal(later) {
 		t.Errorf("got lastRebootTime %v after retry, want %v", st.LastRebootTime(), later)
 	}
-
-	// countReboot=false keeps the counter stable (monitor-only mode).
-	s.MarkWaitingReboot("node-01", later.Add(time.Hour), false)
-	st, _ = s.Get("node-01")
-	if st.RebootCount() != 2 {
-		t.Errorf("rebootCount should not increment when countReboot=false; got %d, want 2", st.RebootCount())
-	}
 }
 
 func TestStateStoreMarkWaitingRebootNonexistent(t *testing.T) {
 	s := NewStateStore()
 	// Should not panic.
-	s.MarkWaitingReboot("nonexistent", time.Now(), true)
+	s.MarkWaitingReboot("nonexistent", time.Now())
 }
 
 func TestStateStoreMarkFailed(t *testing.T) {
 	s := NewStateStore()
 	s.GetOrCreate("node-01")
-	s.MarkWaitingReboot("node-01", time.Now(), true)
+	s.MarkWaitingReboot("node-01", time.Now())
 
 	s.MarkFailed("node-01")
 
@@ -228,7 +221,7 @@ func TestStateStoreReset(t *testing.T) {
 	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
 	s.MarkUnhealthy("node-01", now)
 	s.UpdateCheckerInfo("node-01", []string{"NodeReady"}, true)
-	s.MarkWaitingReboot("node-01", now, true)
+	s.MarkWaitingReboot("node-01", now)
 
 	s.Reset("node-01")
 

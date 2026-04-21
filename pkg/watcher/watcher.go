@@ -231,7 +231,7 @@ func (w *watcher) run(ctx context.Context) error {
 			metrics.RecoveryActionsTotal.WithLabelValues(nodeName, "reboot", mode).Inc()
 			metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseUnhealthy.String()).Set(0)
 			metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseWaitingReboot.String()).Set(1)
-			w.states.MarkWaitingReboot(nodeName, now, !w.monitorOnly)
+			w.states.MarkWaitingReboot(nodeName, now)
 
 		// WaitingReboot: health check still failing after reboot, retry after wait window.
 		case PhaseWaitingReboot:
@@ -280,7 +280,7 @@ func (w *watcher) run(ctx context.Context) error {
 					continue
 				}
 			}
-			w.states.MarkWaitingReboot(nodeName, now, !w.monitorOnly)
+			w.states.MarkWaitingReboot(nodeName, now)
 			mode := modeLabel(w.monitorOnly)
 			slog.Info("Reboot retry",
 				"node", nodeName,
