@@ -46,6 +46,7 @@ helm upgrade -n kube-system --install node-agent ./charts --set monitorOnly=fals
 | `nodePoolIDs` | `""` | Comma-separated node pool IDs to watch. Empty means all nodes. |
 | `rebootWaitMinutes` | `10` | Minutes to wait after rebooting a standard node before retrying. |
 | `gpuRebootWaitMinutes` | `40` | Minutes to wait after rebooting a GPU node before retrying. |
+| `maxRebootRetries` | `5` | Maximum reboot attempts before the node transitions to `Failed` (no further reboots). |
 | `monitorOnly` | `true` | If `true`, log recovery actions without executing them. Set `false` to enable reboots. |
 | `metricsPort` | `9625` | Port for the Prometheus metrics endpoint. |
 

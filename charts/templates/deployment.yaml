@@ -62,6 +62,8 @@ spec:
               value: {{ .Values.rebootWaitMinutes | quote }}
             - name: CIVO_GPU_NODE_REBOOT_WAIT_MINUTES
               value: {{ .Values.gpuRebootWaitMinutes | quote }}
+            - name: CIVO_NODE_MAX_REBOOT_RETRIES
+              value: {{ .Values.maxRebootRetries | quote }}
             - name: CIVO_NODE_AGENT_MONITOR_ONLY
               value: {{ .Values.monitorOnly | quote }}
             - name: CIVO_NODE_AGENT_METRICS_PORT

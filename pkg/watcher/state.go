@@ -16,6 +16,7 @@ const (
 	PhaseWaitingReboot                  // 4 - waiting for reboot to take effect
 	PhaseDrain                          // 5 - future: draining pods
 	PhaseReplace                        // 6 - future: replace issued
+	PhaseFailed                         // 7 - recovery gave up (exceeded retries); awaits manual intervention or natural recovery
 )
 
 // String returns the string representation of a NodePhase.
@@ -35,6 +36,8 @@ func (p NodePhase) String() string {
 		return "Drain"
 	case PhaseReplace:
 		return "Replace"
+	case PhaseFailed:
+		return "Failed"
 	default:
 		return "Unknown"
 	}
@@ -137,9 +140,10 @@ func (s *StateStore) MarkUnhealthy(name string, now time.Time) {
 	st.unhealthySince = now
 }
 
-// MarkWaitingReboot transitions a node to PhaseWaitingReboot,
-// records the reboot time, and increments the reboot counter.
-func (s *StateStore) MarkWaitingReboot(name string, now time.Time) {
+// MarkWaitingReboot transitions a node to PhaseWaitingReboot and records the reboot time.
+// When countReboot is true, the reboot counter is incremented. Pass false in monitor-only
+// mode where no actual reboot was issued.
+func (s *StateStore) MarkWaitingReboot(name string, now time.Time, countReboot bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -149,7 +153,21 @@ func (s *StateStore) MarkWaitingReboot(name string, now time.Time) {
 	}
 	st.phase = PhaseWaitingReboot
 	st.lastRebootTime = now
-	st.rebootCount++
+	if countReboot {
+		st.rebootCount++
+	}
+}
+
+// MarkFailed transitions a node to PhaseFailed after recovery attempts were exhausted.
+func (s *StateStore) MarkFailed(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	st, ok := s.nodes[name]
+	if !ok {
+		return
+	}
+	st.phase = PhaseFailed
 }
 
 // Reset replaces the node's state with a fresh PhaseHealthy entry.

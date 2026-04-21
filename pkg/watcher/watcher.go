@@ -33,6 +33,7 @@ type watcher struct {
 	nodePoolIDs          []string
 	rebootWaitMinutes    time.Duration // Standard nodes (default: 10)
 	gpuRebootWaitMinutes time.Duration // GPU nodes (default: 40)
+	maxRebootRetries     int           // Give up and transition to PhaseFailed after this many reboots
 
 	nodeLabelSelector *metav1.LabelSelector
 	nodeLister        listerscorev1.NodeLister
@@ -230,7 +231,7 @@ func (w *watcher) run(ctx context.Context) error {
 			metrics.RecoveryActionsTotal.WithLabelValues(nodeName, "reboot", mode).Inc()
 			metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseUnhealthy.String()).Set(0)
 			metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseWaitingReboot.String()).Set(1)
-			w.states.MarkWaitingReboot(nodeName, now)
+			w.states.MarkWaitingReboot(nodeName, now, !w.monitorOnly)
 
 		// WaitingReboot: health check still failing after reboot, retry after wait window.
 		case PhaseWaitingReboot:
@@ -255,10 +256,22 @@ func (w *watcher) run(ctx context.Context) error {
 				continue
 			}
 
-			// TODO: Standard nodes should transition to PhaseDrain → PhaseReplace
-			// instead of retrying reboot indefinitely.
-			// GPU nodes must never be replaced; they retry reboot only.
-			// See: Recovery Flow — Standard Nodes (Drain → timeout 30min → Replace)
+			// Retry budget exhausted → give up and transition to PhaseFailed.
+			// The node stays in Failed until it naturally recovers (all checkers pass).
+			// TODO: Standard nodes could transition to PhaseDrain → PhaseReplace here
+			// once that flow is wired up. GPU nodes must stay in Failed (never replaced).
+			if state.RebootCount() >= w.maxRebootRetries {
+				slog.Warn("Reboot retry limit exceeded, giving up",
+					"node", nodeName,
+					"rebootCount", state.RebootCount(),
+					"maxRebootRetries", w.maxRebootRetries,
+					"isGPUNode", state.IsGPUNode(),
+					"failedCheckers", failedCheckers)
+				metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseWaitingReboot.String()).Set(0)
+				metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseFailed.String()).Set(1)
+				w.states.MarkFailed(nodeName)
+				continue
+			}
 
 			if !w.monitorOnly {
 				if err := w.executor.Reboot(ctx, nodeName); err != nil {
@@ -274,7 +287,13 @@ func (w *watcher) run(ctx context.Context) error {
 				"rebootCount", state.RebootCount()+1,
 				"failedCheckers", failedCheckers)
 			metrics.RecoveryActionsTotal.WithLabelValues(nodeName, "reboot", mode).Inc()
-			w.states.MarkWaitingReboot(nodeName, now)
+			w.states.MarkWaitingReboot(nodeName, now, !w.monitorOnly)
+
+		// Failed: recovery attempts exhausted. Wait for natural recovery (all checkers pass).
+		// If the node recovers the "all checkers pass" branch above will Reset it back to Healthy.
+		case PhaseFailed:
+			metrics.NodeUnhealthyDurationSeconds.WithLabelValues(nodeName).Set(
+				now.Sub(state.UnhealthySince()).Seconds())
 		}
 	}
 

@@ -20,6 +20,7 @@ var defaultOptions = []Option{
 	WithExecutor(operation.NewNopExecutor()),
 	WithRebootWaitMinutes("10"),
 	WithGPURebootWaitMinutes("40"),
+	WithMaxRebootRetries("5"),
 }
 
 // WithKubernetesClient returns Option to set Kubernetes API client.
@@ -74,6 +75,19 @@ func WithGPURebootWaitMinutes(s string) Option {
 			w.gpuRebootWaitMinutes = time.Duration(n)
 		} else {
 			slog.Info("GPURebootWaitMinutes is invalid", "value", s)
+		}
+	}
+}
+
+// WithMaxRebootRetries returns Option to set the maximum number of reboot
+// attempts before a node transitions to PhaseFailed.
+func WithMaxRebootRetries(s string) Option {
+	return func(w *watcher) {
+		n, err := strconv.Atoi(s)
+		if err == nil && n > 0 {
+			w.maxRebootRetries = n
+		} else {
+			slog.Info("MaxRebootRetries is invalid", "value", s)
 		}
 	}
 }

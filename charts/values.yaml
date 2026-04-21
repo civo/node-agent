@@ -15,6 +15,9 @@ rebootWaitMinutes: 10
 # Reboot wait time for GPU nodes (minutes).
 gpuRebootWaitMinutes: 40
 
+# Maximum number of reboot attempts before a node transitions to PhaseFailed.
+maxRebootRetries: 5
+
 # Monitor-only mode: log recovery actions without executing them.
 monitorOnly: true
 

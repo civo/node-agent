@@ -33,6 +33,7 @@ var (
 	nodePoolIDs          = strings.TrimSpace(os.Getenv("CIVO_NODE_POOL_IDS"))
 	rebootWaitMinutes    = strings.TrimSpace(os.Getenv("CIVO_NODE_REBOOT_WAIT_MINUTES"))
 	gpuRebootWaitMinutes = strings.TrimSpace(os.Getenv("CIVO_GPU_NODE_REBOOT_WAIT_MINUTES"))
+	maxRebootRetries     = strings.TrimSpace(os.Getenv("CIVO_NODE_MAX_REBOOT_RETRIES"))
 	monitorOnly          = strings.TrimSpace(os.Getenv("CIVO_NODE_AGENT_MONITOR_ONLY"))
 	metricsPort          = strings.TrimSpace(os.Getenv("CIVO_NODE_AGENT_METRICS_PORT"))
 )
@@ -81,6 +82,7 @@ func run(ctx context.Context) error {
 		watcher.WithMonitorOnly(monitorOnly),
 		watcher.WithRebootWaitMinutes(rebootWaitMinutes),
 		watcher.WithGPURebootWaitMinutes(gpuRebootWaitMinutes),
+		watcher.WithMaxRebootRetries(maxRebootRetries),
 	)
 	if err != nil {
 		return err
