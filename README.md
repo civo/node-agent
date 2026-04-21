@@ -21,7 +21,7 @@ No manual setup is required — `node-agent` reads these values directly from th
 
 The GPU health check relies on the `nvidia.com/gpu.count` label added by the NVIDIA GPU Feature Discovery component. Follow the Civo documentation to install the NVIDIA GPU Operator on your cluster:
 
-[Installing the NVIDIA GPU Operator](https://github.com/civo/docs/blob/main/content/docs/kubernetes/advanced/gpu-config.md#installing-the-nvidia-gpu-operator)
+[Installing the NVIDIA GPU Operator](https://www.civo.com/docs/kubernetes/advanced/gpu-config#installing-the-nvidia-gpu-operator)
 
 ## Install `node-agent` chart
 
