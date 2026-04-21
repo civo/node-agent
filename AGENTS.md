@@ -35,9 +35,9 @@ No linter is configured in CI.
 
 ### Packages
 
-- **`pkg/watcher/`** — Orchestrator. Sets up a Node Informer (filtered by optional node pool label selector) and runs a 10s ticker reconcile loop driving a state machine (`Unknown → Healthy → Unhealthy → WaitingReboot`).
-- **`pkg/health/`** — Health checkers (`HealthChecker` interface: `Name()`, `Check() (healthy, reason)`, `Threshold()`).
-- **`pkg/operation/`** — Recovery executors (`Executor` interface; `civoExecutor` for Civo API, `nopExecutor` as safe default).
+- **`pkg/watcher/`** — Orchestrator. Sets up a Node Informer (filtered by optional node pool label selector) and runs a 10s ticker reconcile loop driving the state machine (`Unknown → Healthy → Unhealthy → WaitingReboot → Failed`).
+- **`pkg/health/`** — Health checkers.
+- **`pkg/operation/`** — Recovery executors (Civo API reboot; nop executor used as safe default).
 - **`pkg/metrics/`** — Prometheus metrics (all `civo_` prefixed). Defined once in `metrics.go`.
 
 ## Release
