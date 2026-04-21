@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -62,8 +63,9 @@ func run(ctx context.Context) error {
 	}
 	go func() {
 		slog.Info("Starting metrics server", "addr", metricsServer.Addr)
-		if err := metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := metricsServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("Metrics server failed", "error", err)
+			stop()
 		}
 	}()
 	defer func() {

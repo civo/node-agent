@@ -15,6 +15,7 @@ type HealthChecker interface {
 	Check(node *corev1.Node) (healthy bool, reason string)
 	// Threshold returns how long this checker must continuously fail
 	// before a recovery action is triggered.
+	// A zero value means "trigger immediately on failure" (no wait period).
 	Threshold() time.Duration
 }
 

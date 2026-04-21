@@ -67,7 +67,7 @@ func (c *alwaysFailChecker) Threshold() time.Duration          { return c.thresh
 
 var (
 	testNodePoolID        = "test-node-pool"
-	testRebootWaitMinutes = time.Duration(10)
+	testRebootWaitMinutes = time.Duration(10) * time.Minute
 )
 
 // newTestNode creates a node for testing with common defaults.

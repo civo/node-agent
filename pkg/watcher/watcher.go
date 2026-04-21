@@ -66,7 +66,7 @@ func NewWatcher(ctx context.Context, opts ...Option) (Watcher, error) {
 // setupKubernetesClient creates Kubernetes client based on the kubeconfig path.
 // If kubeconfig path is not empty, the client will be created using that path.
 // Otherwise, if the kubeconfig path is empty, the client will be created using the in-cluster config.
-func (w *watcher) setupKubernetesClient() (err error) {
+func (w *watcher) setupKubernetesClient() error {
 	if w.clientCfgPath != "" && w.client == nil {
 		cfg, err := clientcmd.BuildConfigFromFlags("", w.clientCfgPath)
 		if err != nil {
@@ -241,7 +241,7 @@ func (w *watcher) run(ctx context.Context) error {
 			if state.IsGPUNode() {
 				rebootWait = w.gpuRebootWaitMinutes
 			}
-			if now.Sub(state.LastRebootTime()) < rebootWait*time.Minute {
+			if now.Sub(state.LastRebootTime()) < rebootWait {
 				// In monitor-only mode no reboot actually happened, so logging
 				// "waiting for reboot effect" every tick would be noisy.
 				// The "Reboot retry" log still fires once per rebootWait cycle as a liveness signal.

@@ -60,7 +60,7 @@ func WithRebootWaitMinutes(s string) Option {
 	return func(w *watcher) {
 		n, err := strconv.Atoi(s)
 		if err == nil && n > 0 {
-			w.rebootWaitMinutes = time.Duration(n)
+			w.rebootWaitMinutes = time.Duration(n) * time.Minute
 		} else {
 			slog.Info("RebootWaitMinutes is invalid", "value", s)
 		}
@@ -72,7 +72,7 @@ func WithGPURebootWaitMinutes(s string) Option {
 	return func(w *watcher) {
 		n, err := strconv.Atoi(s)
 		if err == nil && n > 0 {
-			w.gpuRebootWaitMinutes = time.Duration(n)
+			w.gpuRebootWaitMinutes = time.Duration(n) * time.Minute
 		} else {
 			slog.Info("GPURebootWaitMinutes is invalid", "value", s)
 		}
