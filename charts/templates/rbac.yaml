@@ -16,5 +16,6 @@ subjects:
   name: {{ .Chart.Name }}
   namespace: kube-system
 roleRef:
-  kind: ClusterRole 
+  kind: ClusterRole
   name: {{ .Chart.Name }}
+  apiGroup: rbac.authorization.k8s.io

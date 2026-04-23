@@ -6,6 +6,24 @@ image:
   pullPolicy: IfNotPresent
   tag: "6b8426a"
 
+# Comma-separated node pool IDs to watch (empty = all nodes).
+nodePoolIDs: ""
+
+# Reboot wait time for standard nodes (minutes).
+rebootWaitMinutes: 10
+
+# Reboot wait time for GPU nodes (minutes).
+gpuRebootWaitMinutes: 40
+
+# Maximum number of reboot attempts before a node transitions to PhaseFailed.
+maxRebootRetries: 5
+
+# Monitor-only mode: log recovery actions without executing them.
+monitorOnly: true
+
+# Port for Prometheus metrics endpoint.
+metricsPort: 9625
+
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
