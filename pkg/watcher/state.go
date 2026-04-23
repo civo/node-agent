@@ -43,11 +43,15 @@ func (p NodePhase) String() string {
 // NodeState holds the recovery state for a single node.
 // All fields are private; read via getters, mutate via StateStore methods.
 type NodeState struct {
-	mu             sync.RWMutex
-	phase          NodePhase
+	mu    sync.RWMutex
+	phase NodePhase
+
 	unhealthySince time.Time
-	lastRebootTime time.Time
-	rebootCount    int
+
+	lastRebootTime    time.Time
+	rebootCount       int
+	failedRebootCount int
+
 	failedCheckers []string
 	isGPUNode      bool
 }
@@ -71,6 +75,11 @@ func (s *NodeState) RebootCount() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.rebootCount
+}
+func (s *NodeState) FailedRebootCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.failedRebootCount
 }
 func (s *NodeState) IsGPUNode() bool {
 	s.mu.RLock()
@@ -169,6 +178,18 @@ func (s *StateStore) MarkWaitingReboot(name string, now time.Time) {
 	st.phase = PhaseWaitingReboot
 	st.lastRebootTime = now
 	st.rebootCount++
+	st.mu.Unlock()
+}
+
+// RecordRebootFailure increments the failed reboot counter for a node.
+// The node's phase is not changed; the caller decides whether to transition.
+func (s *StateStore) RecordRebootFailure(name string) {
+	st, ok := s.Get(name)
+	if !ok {
+		return
+	}
+	st.mu.Lock()
+	st.failedRebootCount++
 	st.mu.Unlock()
 }
 

@@ -21,6 +21,7 @@ var defaultOptions = []Option{
 	WithRebootWaitMinutes("10"),
 	WithGPURebootWaitMinutes("40"),
 	WithMaxRebootRetries("5"),
+	WithMaxRebootFailures("30"),
 }
 
 // WithKubernetesClient returns Option to set Kubernetes API client.
@@ -88,6 +89,24 @@ func WithMaxRebootRetries(s string) Option {
 			w.maxRebootRetries = n
 		} else {
 			slog.Info("MaxRebootRetries is invalid", "value", s)
+		}
+	}
+}
+
+// WithMaxRebootFailures returns Option to set the maximum number of reboot
+// call failures tolerated before a node transitions to PhaseFailed.
+//
+// Intentionally not exposed as an env var: reboot call failures are not
+// followed by a wait window, so a high value would let the agent hammer
+// the Civo API on sustained failures. The bound is controlled here via
+// the default option to cap the blast radius.
+func WithMaxRebootFailures(s string) Option {
+	return func(w *watcher) {
+		n, err := strconv.Atoi(s)
+		if err == nil && n > 0 {
+			w.maxRebootFailures = n
+		} else {
+			slog.Info("MaxRebootFailures is invalid", "value", s)
 		}
 	}
 }

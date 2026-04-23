@@ -34,6 +34,7 @@ type watcher struct {
 	rebootWaitMinutes    time.Duration // Standard nodes (default: 10)
 	gpuRebootWaitMinutes time.Duration // GPU nodes (default: 40)
 	maxRebootRetries     int           // Give up and transition to PhaseFailed after this many reboots
+	maxRebootFailures    int           // Give up and transition to PhaseFailed after this many reboot call failures
 
 	nodeLabelSelector *metav1.LabelSelector
 	nodeLister        listerscorev1.NodeLister
@@ -218,10 +219,24 @@ func (w *watcher) run(ctx context.Context) error {
 					"failedCheckers", failedCheckers)
 				continue
 			}
+			// Reboot call failure budget exhausted before the first successful
+			// reboot → give up without attempting another reboot.
+			if state.FailedRebootCount() >= w.maxRebootFailures {
+				slog.Warn("Reboot call failure limit exceeded, giving up",
+					"node", nodeName,
+					"failedRebootCount", state.FailedRebootCount(),
+					"maxRebootFailures", w.maxRebootFailures,
+					"failedCheckers", failedCheckers)
+				metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseUnhealthy.String()).Set(0)
+				metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseFailed.String()).Set(1)
+				w.states.MarkFailed(nodeName)
+				continue
+			}
 			if !w.monitorOnly {
 				if err := w.executor.Reboot(ctx, nodeName); err != nil {
 					slog.Error("Failed to reboot node", "node", nodeName, "error", err)
 					metrics.RecoveryFailuresTotal.WithLabelValues(nodeName, "reboot").Inc()
+					w.states.RecordRebootFailure(nodeName)
 					continue
 				}
 			}
@@ -274,11 +289,24 @@ func (w *watcher) run(ctx context.Context) error {
 				w.states.MarkFailed(nodeName)
 				continue
 			}
+			// Reboot call failure budget exhausted → give up to cap Civo API load.
+			if state.FailedRebootCount() >= w.maxRebootFailures {
+				slog.Warn("Reboot call failure limit exceeded, giving up",
+					"node", nodeName,
+					"failedRebootCount", state.FailedRebootCount(),
+					"maxRebootFailures", w.maxRebootFailures,
+					"failedCheckers", failedCheckers)
+				metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseWaitingReboot.String()).Set(0)
+				metrics.RecoveryPhase.WithLabelValues(nodeName, PhaseFailed.String()).Set(1)
+				w.states.MarkFailed(nodeName)
+				continue
+			}
 
 			if !w.monitorOnly {
 				if err := w.executor.Reboot(ctx, nodeName); err != nil {
 					slog.Error("Failed to reboot node (retry)", "node", nodeName, "error", err)
 					metrics.RecoveryFailuresTotal.WithLabelValues(nodeName, "reboot").Inc()
+					w.states.RecordRebootFailure(nodeName)
 					continue
 				}
 			}

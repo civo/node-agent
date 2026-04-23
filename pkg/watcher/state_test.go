@@ -175,6 +175,31 @@ func TestStateStoreMarkWaitingRebootNonexistent(t *testing.T) {
 	s.MarkWaitingReboot("nonexistent", time.Now())
 }
 
+func TestStateStoreRecordRebootFailure(t *testing.T) {
+	s := NewStateStore()
+	s.GetOrCreate("node-01")
+
+	s.RecordRebootFailure("node-01")
+	st, _ := s.Get("node-01")
+	if st.FailedRebootCount() != 1 {
+		t.Errorf("got failedRebootCount %d, want 1", st.FailedRebootCount())
+	}
+	if st.Phase() != PhaseHealthy {
+		t.Errorf("RecordRebootFailure should not change phase, got %v", st.Phase())
+	}
+
+	s.RecordRebootFailure("node-01")
+	if st.FailedRebootCount() != 2 {
+		t.Errorf("got failedRebootCount %d after second call, want 2", st.FailedRebootCount())
+	}
+}
+
+func TestStateStoreRecordRebootFailureNonexistent(t *testing.T) {
+	s := NewStateStore()
+	// Should not panic.
+	s.RecordRebootFailure("nonexistent")
+}
+
 func TestStateStoreMarkFailed(t *testing.T) {
 	s := NewStateStore()
 	s.GetOrCreate("node-01")
@@ -221,6 +246,7 @@ func TestStateStoreReset(t *testing.T) {
 	s.MarkUnhealthy("node-01", now)
 	s.UpdateCheckerInfo("node-01", []string{"NodeReady"}, true)
 	s.MarkWaitingReboot("node-01", now)
+	s.RecordRebootFailure("node-01")
 
 	s.Reset("node-01")
 
@@ -233,6 +259,9 @@ func TestStateStoreReset(t *testing.T) {
 	}
 	if st.RebootCount() != 0 {
 		t.Errorf("got rebootCount %d, want 0", st.RebootCount())
+	}
+	if st.FailedRebootCount() != 0 {
+		t.Errorf("got failedRebootCount %d, want 0", st.FailedRebootCount())
 	}
 	if !st.UnhealthySince().IsZero() {
 		t.Error("unhealthySince should be zero after Reset")

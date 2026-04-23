@@ -581,6 +581,61 @@ func TestRun_RebootRetryLimitExceeded_TransitionsToFailed(t *testing.T) {
 	}
 }
 
+func TestRun_RebootFailureLimitExceeded_TransitionsToFailed(t *testing.T) {
+	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
+	node := newTestNode("node-01", corev1.ConditionFalse, 0)
+	exec := &mockExecutor{
+		rebootFunc: func(_ context.Context, _ string) error {
+			return fmt.Errorf("reboot API error")
+		},
+	}
+	w := newTestWatcher(t,
+		withNodeLister(&fakeNodeLister{nodes: []*corev1.Node{node}}),
+		WithCheckers(health.NewDefaultCheckers()),
+		WithExecutor(exec),
+		WithMonitorOnly("false"),
+		WithRebootWaitMinutes("10"),
+		WithMaxRebootRetries("100"),
+		WithMaxRebootFailures("3"),
+		withNowFunc(func() time.Time { return now }),
+	)
+
+	// Run 1: detect unhealthy.
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	// Advance past the unhealthy threshold; reboots will now be attempted and fail.
+	now = now.Add(11 * time.Minute)
+
+	// Runs 2-4: reboot fails 3 times → failedRebootCount=3, still PhaseUnhealthy.
+	for i := 0; i < 3; i++ {
+		if err := w.run(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	state, _ := w.states.Get("node-01")
+	if state.FailedRebootCount() != 3 {
+		t.Fatalf("expected failedRebootCount=3 after 3 failures, got %d", state.FailedRebootCount())
+	}
+	if state.Phase() != PhaseUnhealthy {
+		t.Fatalf("expected still PhaseUnhealthy at limit, got %v", state.Phase())
+	}
+
+	// Next run: failedRebootCount=3 >= max=3 → PhaseFailed.
+	if err := w.run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	state, _ = w.states.Get("node-01")
+	if state.Phase() != PhaseFailed {
+		t.Errorf("got phase %v, want PhaseFailed", state.Phase())
+	}
+	if len(exec.calls) != 3 {
+		t.Errorf("expected exactly 3 reboot calls (no further reboots after Failed), got %d", len(exec.calls))
+	}
+}
+
 func TestRun_MonitorOnlySimulatesFullLifecycle(t *testing.T) {
 	now := time.Date(2026, 4, 13, 12, 0, 0, 0, time.UTC)
 	node := newTestNode("node-01", corev1.ConditionFalse, 0)
