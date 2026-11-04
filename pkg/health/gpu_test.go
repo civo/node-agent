@@ -165,6 +165,81 @@ func TestGPUChecker_Check(t *testing.T) {
 			want: false,
 		},
 		{
+			description: "returns true when allocatable matches label count multiplied by replicas (time-slicing)",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "node-01",
+					Labels: map[string]string{gpuCountLabel: "1", gpuReplicasLabel: "4"},
+				},
+				Status: corev1.NodeStatus{
+					Allocatable: corev1.ResourceList{
+						gpuResourceName: resource.MustParse("4"),
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			description: "returns false when a physical GPU is lost with time-slicing",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "node-01",
+					Labels: map[string]string{gpuCountLabel: "2", gpuReplicasLabel: "4"},
+				},
+				Status: corev1.NodeStatus{
+					Allocatable: corev1.ResourceList{
+						gpuResourceName: resource.MustParse("4"),
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			description: "returns false when allocatable equals label count without replicas (time-slicing)",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "node-01",
+					Labels: map[string]string{gpuCountLabel: "1", gpuReplicasLabel: "4"},
+				},
+				Status: corev1.NodeStatus{
+					Allocatable: corev1.ResourceList{
+						gpuResourceName: resource.MustParse("1"),
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			description: "returns true when gpu.replicas label is invalid and allocatable matches label count",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "node-01",
+					Labels: map[string]string{gpuCountLabel: "8", gpuReplicasLabel: "invalid"},
+				},
+				Status: corev1.NodeStatus{
+					Allocatable: corev1.ResourceList{
+						gpuResourceName: resource.MustParse("8"),
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			description: "returns true when gpu.replicas label is 0 and allocatable matches label count",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "node-01",
+					Labels: map[string]string{gpuCountLabel: "8", gpuReplicasLabel: "0"},
+				},
+				Status: corev1.NodeStatus{
+					Allocatable: corev1.ResourceList{
+						gpuResourceName: resource.MustParse("8"),
+					},
+				},
+			},
+			want: true,
+		},
+		{
 			description: "returns true when gpu.count label is invalid",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
