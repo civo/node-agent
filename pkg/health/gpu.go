@@ -8,24 +8,27 @@ import (
 )
 
 const (
-	gpuResourceName = "nvidia.com/gpu"
-	gpuCountLabel   = "nvidia.com/gpu.count"
-	gpuThreshold    = 10 * time.Minute
+	gpuResourceName  = "nvidia.com/gpu"
+	gpuCountLabel    = "nvidia.com/gpu.count"
+	gpuReplicasLabel = "nvidia.com/gpu.replicas"
+	gpuThreshold     = 10 * time.Minute
 )
 
 // gpuChecker reports healthy when the node's allocatable GPU count
-// matches the expected count from the nvidia.com/gpu.count label.
-// If the label is not present, the node is not a GPU node and the check is skipped.
+// matches the expected count from the nvidia.com/gpu.count label
+// multiplied by the nvidia.com/gpu.replicas label (GPU sharing such as time-slicing).
+// If the count label is not present, the node is not a GPU node and the check is skipped.
 type gpuChecker struct{}
 
 func (c *gpuChecker) Name() string             { return "GPU" }
 func (c *gpuChecker) Threshold() time.Duration { return gpuThreshold }
 
 func (c *gpuChecker) Check(node *corev1.Node) (bool, string) {
-	expected, ok := expectedGPUCount(node)
-	if !ok || expected == 0 {
+	count, ok := expectedGPUCount(node)
+	if !ok || count == 0 {
 		return true, "NonGPUNode"
 	}
+	expected := int64(count) * int64(gpuReplicas(node))
 
 	quantity, exists := node.Status.Allocatable[gpuResourceName]
 	if !exists || quantity.IsZero() {
@@ -37,7 +40,7 @@ func (c *gpuChecker) Check(node *corev1.Node) (bool, string) {
 		return false, "NoAllocatableGPU"
 	}
 
-	if actual == int64(expected) {
+	if actual == expected {
 		return true, "GPUCountMatch"
 	}
 	return false, "GPUCountMismatch"
@@ -62,4 +65,18 @@ func expectedGPUCount(node *corev1.Node) (int, bool) {
 		return 0, false
 	}
 	return n, true
+}
+
+// gpuReplicas reads the nvidia.com/gpu.replicas label from the node.
+// It returns 1 when the label is absent or invalid, i.e. the GPUs are not shared.
+func gpuReplicas(node *corev1.Node) int {
+	v, exists := node.Labels[gpuReplicasLabel]
+	if !exists {
+		return 1
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 {
+		return 1
+	}
+	return n
 }
